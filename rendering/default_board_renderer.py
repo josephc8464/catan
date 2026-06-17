@@ -88,7 +88,7 @@ class DefaultBoardRenderer:
     
     def get_building_image(self, board, vertex):
         building = board.buildings[vertex]
-
+        
         if building is None:
             return None
         
