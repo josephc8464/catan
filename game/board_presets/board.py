@@ -12,11 +12,19 @@ class Board(ABC):
         self.development_cards = []
         self.tile_vertices = {i: [] for i in range(19)} 
         self.buildings = {i: None for i in range(54)} #None or tuple (building type, owner's color)
+        self.ports = {pair: None for pair in [(36,42), (18,24), (48,49), (2,7), (0,1), (50,51), (5,10), (41,47), (23,29)]}
         self.robber_placement = 0
     
-    def add_building(self, vertex, color, buildingType):
+    def add_building(self, vertex, color, buildingType) -> None:
         self.buildings[vertex] = (buildingType, color)
-        
+    
+    def add_ports(self) -> None:
+        port_types = ['wood', 'brick', 'sheep', 'wheat', 'ore'] + ['any'] * 4
+        shuffle(port_types)
+    
+        for i, pair in enumerate(self.ports.keys()):
+            self.ports[pair] = port_types[i]
+                                 
     def add_tiles_vertices(self, vertexDict) -> None:
         for tile_id, vertices in vertexDict.items():
             for vertex in vertices:

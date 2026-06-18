@@ -59,6 +59,7 @@ class DefaultBoard(Board):
         }   
         super().add_tiles_vertices(vertexDict)
 
+        super().add_ports()
 
 
     

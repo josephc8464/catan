@@ -3,7 +3,7 @@ import pygame
 import sys
 sys.path.append('.')
 
-from rendering.default_board_renderer import DefaultBoardRenderer
+from rendering.default.default_board_renderer import DefaultBoardRenderer
 from game.board_presets.default_board import DefaultBoard
 
 def board_renderer_test(board, frames=None):
