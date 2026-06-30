@@ -1,22 +1,29 @@
 from random import shuffle
 
-from game.board_components import Graph, Vertex, Tile
+from game.board_components import Graph, Tile
 from abc import ABC, abstractmethod
 
 class Board(ABC):
     def __init__(self, num_vertices) -> None:
         self.graph = Graph(num_vertices)
-        self.vertices = {i: Vertex(i) for i in range(num_vertices)}
         self.tiles = {}
         self.bank = {'wood': 19, 'brick': 19, 'sheep': 19, 'wheat': 19, 'ore': 19}
         self.development_cards = []
         self.tile_vertices = {i: [] for i in range(19)} 
         self.buildings = {i: None for i in range(54)} #None or tuple (building type, owner's color)
-        self.ports = {pair: None for pair in [(36,42), (18,24), (48,49), (2,7), (0,1), (50,51), (5,10), (41,47), (23,29)]}
+        self.ports = {pair: "" for pair in [(36,42), (18,24), (48,49), (2,7), (0,1), (50,51), (5,10), (41,47), (23,29)]}
         self.robber_placement = 0
-    
+
+    def get_port_for_tile(self, tile_id):
+        tile_verts = self.tile_vertices[tile_id]
+        for pair, resource in self.ports.items():
+            v1, v2 = pair
+            if v1 in tile_verts and v2 in tile_verts:
+                return (pair, resource)
+        return None
+
     def add_building(self, vertex, color, buildingType) -> None:
-        self.buildings[vertex] = (buildingType, color)
+        self.buildings[vertex] = (buildingType, color) # type: ignore
     
     def add_ports(self) -> None:
         port_types = ['wood', 'brick', 'sheep', 'wheat', 'ore'] + ['any'] * 4

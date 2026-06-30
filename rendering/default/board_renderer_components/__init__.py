@@ -1,0 +1,4 @@
+# rendering/default/default_board_renderer_components/__init__.py
+from .dynamic_sprite_manager import DynamicSpriteManager
+from .static_sprite_loader import StaticSpriteLoader
+from .camera_group import CameraGroup
