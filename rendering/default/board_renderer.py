@@ -54,7 +54,7 @@ class DefaultBoardRenderer():
         self.hex_sprites, self.token_sprites, self.port_sprites = self.static_loader.load_static_sprites(board, land_hex_columns, sprite_config)
         self.camera_group.add(self.hex_sprites)
         self.camera_group.add(self.token_sprites)
-        self.camera_group.add(self.port_sprites) 
+        self.camera_group.add(self.port_sprites)
 
     def render_board(self, board):
         
