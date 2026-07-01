@@ -21,12 +21,12 @@ class PositionUtility:
         }
 
         self._BUILDING_OFFSETS = {
-            0: [0.1,  -0.05],  # TopLeft
-            1: [0.9,  -0.05],  # TopRight
-            2: [-0.1,  0.45],  # Left
-            3: [1.1,   0.45],  # Right
-            4: [0.1,   0.95],  # BottomLeft
-            5: [0.9,   0.95],  # BottomRight
+            0: [0.375,  0.1],  # TopLeft
+            1: [1.025,  0.1],  # TopRight
+            2: [0.05,  0.6],  # Left
+            3: [1.35,   0.6],  # Right
+            4: [0.375,   1.1],  # BottomLeft
+            5: [1.025,   1.1],  # BottomRight
         }
 
     def _determine_vertex_index(self, tile_vertices, target_vertex) -> int:

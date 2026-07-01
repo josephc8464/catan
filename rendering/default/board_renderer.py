@@ -24,6 +24,9 @@ class DefaultBoardRenderer():
         self.roads_dirty = True
         self.buildings_dirty = True
 
+        #Graph Positioning
+        self.vertex_positions = {i: None for i in range(54)}
+
         #Hex Config
         self.hex_size = int(200 * self.scale)
         self.hex_spacing = [int(145 * self.scale), int(170 * self.scale)]
@@ -36,10 +39,10 @@ class DefaultBoardRenderer():
         self.port_size = int(125 * self.scale)
 
         #Road Config
-        self.road_size = [int(80 * self.scale), int(20 * self.scale)]
+        self.road_size = [int(60 * self.scale), int(20 * self.scale)]
         
         #Building Config
-        self.building_size = int(50 * self.scale)
+        self.building_size = int(40 * self.scale)
 
         sprite_config = {
             "hex_size": self.hex_size,
@@ -52,6 +55,8 @@ class DefaultBoardRenderer():
         land_hex_columns = [3, 4, 5, 4, 3]
         self.camera_group.background = self.static_loader.load_background(window_resolution, self.hex_size, self.hex_spacing)
         self.hex_sprites, self.token_sprites, self.port_sprites = self.static_loader.load_static_sprites(board, land_hex_columns, sprite_config)
+        self.vertex_positions = self.static_loader.calculate_vertex_positions(board.tile_vertices, self.hex_sprites, self.hex_spacing)
+
         self.camera_group.add(self.hex_sprites)
         self.camera_group.add(self.token_sprites)
         self.camera_group.add(self.port_sprites)
@@ -59,19 +64,20 @@ class DefaultBoardRenderer():
     def render_board(self, board):
         
         if self.robber_dirty:
+            self.camera_group.remove(self.robber_sprite)
             self.robber_sprite = self.dynamic_manager.update_robber(board, self.hex_sprites, self.token_size, self.token_spacing)
             self.camera_group.add(self.robber_sprite)
             self.robber_dirty = False
         
         if self.roads_dirty:
             self._clear_sprites(self.road_sprites)
-            self.road_sprites = self.dynamic_manager.update_roads(board, self.hex_sprites, self.road_size, self.hex_spacing)
+            self.road_sprites = self.dynamic_manager.update_roads(board, self.vertex_positions, self.road_size)
             self.camera_group.add(self.road_sprites)
             self.roads_dirty = False
 
         if self.buildings_dirty:
             self._clear_sprites(self.building_sprites)
-            self.building_sprites = self.dynamic_manager.update_buildings(board, self.hex_sprites, self.building_size, self.hex_spacing)
+            self.building_sprites = self.dynamic_manager.update_buildings(board, self.building_size, self.vertex_positions)
             self.camera_group.add(self.building_sprites)
             self.building_dirty = False
         

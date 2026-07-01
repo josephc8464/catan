@@ -14,11 +14,35 @@ class StaticSpriteLoader():
         Token.load_images()
         Port.load_images()
     
+    def calculate_vertex_positions(self, tile_vertices, hex_sprites, hex_spacing) -> dict[int, tuple[float, float]]:
+        vertex_positions = {i: (0.0, 0.0) for i in range(54)}
+        
+        for hex in hex_sprites:
+            tile_verts = tile_vertices[hex.id]
+            for vertex in tile_verts:
+
+                if vertex_positions[vertex] != (0.0, 0.0):
+                    continue
+
+                pos_offset = self.pos_util.get_building_offset(tile_verts, vertex)
+                pos_offset_x = pos_offset[0]
+                pos_offset_y = pos_offset[1]
+
+                pos_x_scaled = hex.rect.x + (pos_offset_x * hex_spacing[0])
+                pos_y_scaled = hex.rect.y + (pos_offset_y * hex_spacing[1])
+
+                vertex_positions[vertex] = (pos_x_scaled, pos_y_scaled)
+
+        return vertex_positions
+
     def _add_hex_sprite(self, hex_size, resource, hex_index, pos_x, pos_y) -> Hex:
         hex = Hex(resource, (pos_x, pos_y ), hex_index)
         
         assert hex.image is not None
-        hex.image = pygame.transform.scale(hex.image, (hex_size, hex_size))
+        assert hex.rect is not None
+        scaled = pygame.transform.scale(hex.image, (hex_size, hex_size))
+        hex.image = scaled
+        hex.rect = scaled.get_rect(topleft=hex.rect.topleft)
 
         return hex
 
@@ -31,7 +55,10 @@ class StaticSpriteLoader():
             token = Token(number, (pos_x, pos_y))
 
             assert token.image is not None
-            token.image = pygame.transform.scale(token.image, (token_size, token_size))
+            assert token.rect is not None
+            scaled = pygame.transform.scale(token.image, (token_size, token_size))
+            token.image = scaled
+            token.rect = scaled.get_rect(topleft=token.rect.topleft)
         
         return token
     
@@ -53,7 +80,10 @@ class StaticSpriteLoader():
                 port = Port(resource,(new_pos_x, new_pos_y ))
 
                 assert port.image is not None
-                port.image = pygame.transform.scale(port.image, (port_size, port_size))
+                assert port.rect is not None
+                scaled = pygame.transform.scale(port.image, (port_size, port_size))
+                port.image = scaled
+                port.rect = scaled.get_rect(topleft=port.rect.topleft)
 
         return port   
 

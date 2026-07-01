@@ -2,7 +2,7 @@ class Graph():
 
     def __init__(self, size):
         self.adj_list = {i: [] for i in range(size)}
-        self.edge_color = {} #blue, red, orange, white
+        self.edge_color = {} 
 
     def add_edge(self, u, v):
         if v not in self.adj_list[u] and u not in self.adj_list[v]:

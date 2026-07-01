@@ -172,4 +172,4 @@ def board_full_test():
         test(run_timed_test)
 
 if __name__ == "__main__":
-    board_random_game()
+    board_full_test()
