@@ -11,16 +11,7 @@ class PositionUtility:
             "bottomCenter": [ 0.0,  1.0],
         }
 
-        self._ROAD_OFFSETS = {
-            "topLeft":      [0.0,   0.125, 60],
-            "topRight":     [1.0,   0.125, -60],
-            "topCenter":    [0.425, 0.05,  0],
-            "bottomLeft":   [0.0,   0.625, -60],
-            "bottomRight":  [1.0,   0.625, 60],
-            "bottomCenter": [0.425, 1.05,  0],
-        }
-
-        self._BUILDING_OFFSETS = {
+        self._VERTEX_OFFSETS = {
             0: [0.375,  0.1],  # TopLeft
             1: [1.025,  0.1],  # TopRight
             2: [0.05,  0.6],  # Left
@@ -50,9 +41,6 @@ class PositionUtility:
     def get_port_offset(self, orientation) -> list[float]:
         return self._PORT_OFFSETS.get(orientation, [0.0, 0.0])
     
-    def get_road_offset(self, orientation) -> list[float]:
-        return self._ROAD_OFFSETS.get(orientation, [0.0, 0.0, 0.0])
-    
-    def get_building_offset(self, tile_vertices, vertex) -> list[float]:
+    def get_vertex_offset(self, tile_vertices, vertex) -> list[float]:
         index = self._determine_vertex_index(tile_vertices, vertex)
-        return self._BUILDING_OFFSETS.get(index, [0.0, 0.0])
+        return self._VERTEX_OFFSETS.get(index, [0.0, 0.0])

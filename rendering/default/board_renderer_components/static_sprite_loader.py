@@ -24,7 +24,7 @@ class StaticSpriteLoader():
                 if vertex_positions[vertex] != (0.0, 0.0):
                     continue
 
-                pos_offset = self.pos_util.get_building_offset(tile_verts, vertex)
+                pos_offset = self.pos_util.get_vertex_offset(tile_verts, vertex)
                 pos_offset_x = pos_offset[0]
                 pos_offset_y = pos_offset[1]
 
