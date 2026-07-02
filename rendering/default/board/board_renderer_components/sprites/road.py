@@ -19,6 +19,8 @@ class Road(pygame.sprite.Sprite):
 
     def _get_color_road(self, color):
         color_util = ColorUtility()
+
+        assert Road.road_image is not None
         road_image = Road.road_image.copy()
         road_image.fill(color_util.get_color(color), special_flags=pygame.BLEND_RGB_MULT)
         return road_image

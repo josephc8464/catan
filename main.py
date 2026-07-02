@@ -1,6 +1,6 @@
 # Example file showing a basic pygame "game loop"
 import pygame
-from rendering.default.board_renderer import DefaultBoardRenderer
+from rendering.default.board.board_renderer import DefaultBoardRenderer
 from game.board_presets.default_board import DefaultBoard
 
 # pygame setup

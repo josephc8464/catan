@@ -3,13 +3,14 @@ import pygame
 class CameraGroup(pygame.sprite.Group): 
     display_surface: pygame.Surface
 
-    def __init__(self, window_resolution, display_surface, scale):
+    def __init__(self, window_resolution, display_surface):
         super().__init__()
         self.display_surface = display_surface
         self.display_surface_w = self.display_surface.get_width()
         self.display_surface_h = self.display_surface.get_height()
 
         self.background = pygame.Surface((window_resolution[0], window_resolution[1]), pygame.SRCALPHA)
+        self.dirty = True  # Flag to indicate if the group needs to be redrawn
 
         #camera offset
         self.offset = pygame.math.Vector2()
@@ -53,11 +54,13 @@ class CameraGroup(pygame.sprite.Group):
     def custom_draw(self):
         mouse_pos = pygame.mouse.get_pos()
 
-        if self.background:
+        if self.dirty:
+            self.internal_surf.fill((0, 0, 0, 0))  # clear
             self.internal_surf.blit(self.background, (0, 0))
-        
-        for sprite in self.sprites():
-            self.internal_surf.blit(sprite.image, sprite.rect.topleft)
+            
+            for sprite in self.sprites():
+                self.internal_surf.blit(sprite.image, sprite.rect)
+            self.dirty = False
 
         scaled_surf = pygame.transform.scale(self.internal_surf,self.internal_surface_size_vector * self.zoom_scale)
         scaled_rect = scaled_surf.get_rect(center = (self.internal_offset.x, self.internal_offset.y))

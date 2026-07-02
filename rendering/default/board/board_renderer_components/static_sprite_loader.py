@@ -1,5 +1,7 @@
+import math
+
 import pygame
-from rendering.default.board_renderer_components.sprites import Hex, Token, Port
+from rendering.default.board.board_renderer_components.sprites import Hex, Token, Port
 from rendering.utils import ColorUtility, PositionUtility
 
 class StaticSpriteLoader():
@@ -34,6 +36,43 @@ class StaticSpriteLoader():
                 vertex_positions[vertex] = (pos_x_scaled, pos_y_scaled)
 
         return vertex_positions
+
+    def build_port_bridges(self, vertex_positions, ports) -> list[pygame.sprite.Sprite]:
+        port_bridges = []
+
+        for port in ports:
+            v1, v2 = port.vertices[0], port.vertices[1]
+            pos_v1 = vertex_positions[v1]
+            pos_v2 = vertex_positions[v2]
+
+            port_pos = port.rect.center
+
+            angle_v1 = -math.degrees(math.atan2(pos_v1[1] - port_pos[1], pos_v1[0] - port_pos[0]))
+            angle_v2 = -math.degrees(math.atan2(pos_v2[1] - port_pos[1], pos_v2[0] - port_pos[0]))
+
+            bridge_sprite_v1 = self._create_bridge(pos_v1, port_pos, angle_v1)
+            bridge_sprite_v2 = self._create_bridge(pos_v2, port_pos, angle_v2)
+
+            port_bridges.append(bridge_sprite_v1)
+            port_bridges.append(bridge_sprite_v2)
+
+        return port_bridges
+
+    def _create_bridge(self, pos1, pos2, angle) -> pygame.sprite.Sprite:
+        bridge = pygame.sprite.Sprite()
+        
+        width = int(math.dist(pos1, pos2))
+        height = 8  # thickness of bridge line
+        
+        bridge.image = pygame.Surface((width, height), pygame.SRCALPHA)
+        bridge.image.fill((139, 69, 19))  # brown color
+        
+        rotated = pygame.transform.rotate(bridge.image, angle)
+        midpoint = ((pos1[0] + pos2[0]) / 2, (pos1[1] + pos2[1]) / 2)
+        bridge.rect = rotated.get_rect(center=midpoint)
+        bridge.image = rotated
+    
+        return bridge
 
     def _add_hex_sprite(self, hex_size, resource, hex_index, pos_x, pos_y) -> Hex:
         hex = Hex(resource, (pos_x, pos_y ), hex_index)
@@ -77,13 +116,13 @@ class StaticSpriteLoader():
 
                 new_pos_x = pos_x + offset[0] * hex_spacing[0]
                 new_pos_y = pos_y + offset[1] * hex_spacing[1]
-                port = Port(resource,(new_pos_x, new_pos_y ))
+                port = Port(resource,(new_pos_x, new_pos_y ), (v1, v2))
 
                 assert port.image is not None
                 assert port.rect is not None
                 scaled = pygame.transform.scale(port.image, (port_size, port_size))
                 port.image = scaled
-                port.rect = scaled.get_rect(topleft=port.rect.topleft)
+                port.rect = scaled.get_rect(center=port.rect.topleft)
 
         return port   
 
@@ -116,8 +155,8 @@ class StaticSpriteLoader():
                 pos_x = land_pos_x + hex_spacing[0] * i
                 pos_y = land_pos_y + y_adjust + hex_spacing[1] * (j + 5)
 
-                port_pos_x = pos_x + hex_spacing[0] // 4 
-                port_pos_y = pos_y + hex_spacing[1] // 4
+                port_pos_x = pos_x + hex_spacing[0] // 1.5
+                port_pos_y = pos_y + hex_spacing[1] // 1.75
                 
                 hex_sprite = self._add_hex_sprite(hex_size, board.tiles[hex_index].resource, hex_index, pos_x, pos_y)
                 token_sprite = self._add_token_sprite(token_size, board.tiles[hex_index].number, (pos_x + token_spacing[0]), (pos_y + token_spacing[1]))

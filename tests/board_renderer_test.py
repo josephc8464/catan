@@ -3,7 +3,7 @@ import pygame
 import sys
 sys.path.append('.')
 
-from rendering.default.board_renderer import DefaultBoardRenderer
+from rendering.default.board.board_renderer import DefaultBoardRenderer
 from game.board_presets.default_board import DefaultBoard
 
 BASE_WIDTH, BASE_HEIGHT = 1920, 1080
@@ -41,7 +41,7 @@ def board_renderer_test(board):
 
             
         screen.fill((0, 0, 0))
-        renderer.render_board(board)
+        renderer.render_board()
         pygame.display.flip()
         clock.tick(60)
     
@@ -74,7 +74,7 @@ def run_timed_test(board, frames=3):
             if event.type == pygame.MOUSEWHEEL:
                 renderer.camera_group.update_zoom(event.y * 0.075, pygame.mouse.get_pos())
 
-        renderer.render_board(board)
+        renderer.render_board()
         pygame.display.flip()
         clock.tick(1)  # 1 fps
 
@@ -173,3 +173,4 @@ def board_full_test():
 
 if __name__ == "__main__":
     board_full_test()
+    

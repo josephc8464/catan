@@ -1,13 +1,14 @@
 import math
 
 import pygame
-from rendering.default.board_renderer_components.sprites import Token, Road, Building, road
+from rendering.default.board.board_renderer_components.sprites import Building, Road, Token
 from rendering.utils import ColorUtility, PositionUtility
 
 class DynamicSpriteManager():
-    def __init__(self):
+    def __init__(self, board):
         self._load_sprite_images()
         
+        self.board = board
         self.pos_util = PositionUtility()
         self.color_util = ColorUtility()
     
@@ -16,13 +17,13 @@ class DynamicSpriteManager():
         Road.load_images()
         Building.load_images()
 
-    def update_roads(self, board, vertex_positions, road_size) -> list[Road]:
+    def update_roads(self, vertex_positions, road_size) -> list[Road]:
         road_sprites = []
 
         for vertex_id, pos in vertex_positions.items():
-            for neighbor_id in board.graph.get_neighbors(vertex_id):
+            for neighbor_id in self.board.graph.get_neighbors(vertex_id):
                 if neighbor_id > vertex_id:
-                    color = board.graph.get_edge_color(vertex_id, neighbor_id)
+                    color = self.board.graph.get_edge_color(vertex_id, neighbor_id)
 
                     if color is not None:
                         pos_x, pos_y = pos
@@ -45,20 +46,20 @@ class DynamicSpriteManager():
         
         return road_sprites
 
-    def update_robber(self, board, hex_sprites, token_size, token_spacing) -> Token | None:
+    def update_robber(self, hex_sprites, token_size, token_spacing) -> Token | None:
         robber = None
 
         for sprite in hex_sprites:
-                if board.robber_placement == sprite.id:
+                if self.board.robber_placement == sprite.id:
                         robber = self._create_robber(token_size, sprite.rect.x + token_spacing[0], sprite.rect.y + token_spacing[1])
 
         return robber
     
-    def update_buildings(self, board, building_size, vertex_positions) -> list[Building]:
+    def update_buildings(self, building_size, vertex_positions) -> list[Building]:
         building_sprites = []
 
-        for i, building in board.buildings.items():
-            if building is not None:
+        for i, building in self.board.buildings.items():
+            if building != (None, None):
                 building_type, color = building
                 pos_x, pos_y = vertex_positions[i]
                 building_sprite = Building(color, building_type, (pos_x, pos_y))

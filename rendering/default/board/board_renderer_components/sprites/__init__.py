@@ -1,4 +1,4 @@
-# rendering/default/sprites/default_board_renderer_components/__init__.py
+# rendering/default/board/board_renderer_components/sprites/__init__.py
 from .hex import Hex
 from .token import Token
 from .port import Port

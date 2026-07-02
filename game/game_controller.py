@@ -6,6 +6,6 @@ class GameController:
         self.board = board
         self.players = players
         self.current_player_index = 0
-        
+    
     
     

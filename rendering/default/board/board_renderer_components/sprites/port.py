@@ -2,7 +2,7 @@ import pygame
 
 class Port(pygame.sprite.Sprite):
     images = {}
-    def __init__(self, port_resource, pos):
+    def __init__(self, port_resource, pos, vertices):
         super().__init__()
 
         if not self.images:
@@ -10,6 +10,7 @@ class Port(pygame.sprite.Sprite):
         
         self.image = Port.images[port_resource]
         self.rect = self.image.get_rect(topleft=pos)
+        self.vertices = vertices
 
     @staticmethod
     def _get_resource_icon(resource) -> str:

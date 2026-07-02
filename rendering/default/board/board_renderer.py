@@ -1,20 +1,20 @@
-import pygame
-from rendering.default.board_renderer_components.sprites import Hex, Token, Port, Road, Building
-from rendering.default.board_renderer_components import StaticSpriteLoader, DynamicSpriteManager, CameraGroup
+from rendering.default.board.board_renderer_components import StaticSpriteLoader, DynamicSpriteManager, CameraGroup
 
 class DefaultBoardRenderer():      
     def __init__(self, board, window_resolution, disaply_surface, scale):
         self.scale = scale
+        self.board = board
 
         #Dependencies
-        self.camera_group = CameraGroup(window_resolution, disaply_surface, scale)
+        self.camera_group = CameraGroup(window_resolution, disaply_surface)
         self.static_loader = StaticSpriteLoader()
-        self.dynamic_manager = DynamicSpriteManager()
+        self.dynamic_manager = DynamicSpriteManager(self.board)
 
         #Sprite Lists
         self.hex_sprites = []
         self.token_sprites = []
         self.port_sprites = []
+        self.port_bridge_sprites = []
         self.building_sprites = []
         self.road_sprites = []
         self.robber_sprite = None
@@ -54,31 +54,36 @@ class DefaultBoardRenderer():
 
         land_hex_columns = [3, 4, 5, 4, 3]
         self.camera_group.background = self.static_loader.load_background(window_resolution, self.hex_size, self.hex_spacing)
-        self.hex_sprites, self.token_sprites, self.port_sprites = self.static_loader.load_static_sprites(board, land_hex_columns, sprite_config)
-        self.vertex_positions = self.static_loader.calculate_vertex_positions(board.tile_vertices, self.hex_sprites, self.hex_spacing)
-
+        self.hex_sprites, self.token_sprites, self.port_sprites = self.static_loader.load_static_sprites(self.board, land_hex_columns, sprite_config)
+        self.vertex_positions = self.static_loader.calculate_vertex_positions(self.board.tile_vertices, self.hex_sprites, self.hex_spacing)
+        self.port_bridge_sprites = self.static_loader.build_port_bridges(self.vertex_positions, self.port_sprites)
+    
         self.camera_group.add(self.hex_sprites)
         self.camera_group.add(self.token_sprites)
+        self.camera_group.add(self.port_bridge_sprites)
         self.camera_group.add(self.port_sprites)
 
-    def render_board(self, board):
+    def render_board(self):
         
         if self.robber_dirty:
             self.camera_group.remove(self.robber_sprite)
-            self.robber_sprite = self.dynamic_manager.update_robber(board, self.hex_sprites, self.token_size, self.token_spacing)
+            self.robber_sprite = self.dynamic_manager.update_robber(self.hex_sprites, self.token_size, self.token_spacing)
             self.camera_group.add(self.robber_sprite)
+            self.camera_group.dirty = True
             self.robber_dirty = False
         
         if self.roads_dirty:
             self._clear_sprites(self.road_sprites)
-            self.road_sprites = self.dynamic_manager.update_roads(board, self.vertex_positions, self.road_size)
+            self.road_sprites = self.dynamic_manager.update_roads(self.vertex_positions, self.road_size)
             self.camera_group.add(self.road_sprites)
+            self.camera_group.dirty = True
             self.roads_dirty = False
 
         if self.buildings_dirty:
             self._clear_sprites(self.building_sprites)
-            self.building_sprites = self.dynamic_manager.update_buildings(board, self.building_size, self.vertex_positions)
+            self.building_sprites = self.dynamic_manager.update_buildings(self.building_size, self.vertex_positions)
             self.camera_group.add(self.building_sprites)
+            self.camera_group.dirty = True
             self.building_dirty = False
         
         self.camera_group.custom_draw()
