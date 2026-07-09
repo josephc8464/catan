@@ -4,6 +4,9 @@ class Graph():
         self.adj_list = {i: [] for i in range(size)}
         self.edge_color = {} 
 
+    def has_edge(self, u, v) -> bool:
+        return v in self.adj_list[u]
+    
     def add_edge(self, u, v):
         if v not in self.adj_list[u] and u not in self.adj_list[v]:
             self.adj_list[u].append(v)
