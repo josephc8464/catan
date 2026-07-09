@@ -1,7 +1,7 @@
 import sys
 sys.path.append('.')
 
-from game.board_presets.default_board import DefaultBoard
+from game.board_presets.default.default_board import DefaultBoard
 
 def test_default_board_setup():
     board = DefaultBoard()

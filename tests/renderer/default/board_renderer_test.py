@@ -4,7 +4,7 @@ import sys
 sys.path.append('.')
 
 from rendering.default.board.board_renderer import DefaultBoardRenderer
-from game.board_presets.default_board import DefaultBoard
+from game.board_presets.default.default_board import DefaultBoard
 
 BASE_WIDTH, BASE_HEIGHT = 1920, 1080
 
