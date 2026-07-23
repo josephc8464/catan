@@ -2,21 +2,35 @@ import math
 
 import pygame
 from rendering.default.board.board_renderer_components.sprites import Hex, Token, Port
-from rendering.utils import ColorUtility, PositionUtility
+from rendering.utils import PositionUtility
+from game.board_presets.default.default_board import DefaultBoard
 
 class StaticSpriteLoader():
+    """
+    Loader for static sprites.
+    
+    Sprites that do not change based on gameplay. These include: Hexes, Tokens associated with Hexes,
+    Ports, Port Bridges, and the Sea / Background Surface. The goal of this class is to construct a 
+    surface that can be easily reblitted without explicitly calculating every position multiple times.
+    By returning a surface of blitted static images, camera group utilizes a copy of the surface
+    on reloads.
+    
+    Attributes:
+        pos_util: Reference for positioning sprites on the screen.
+    """  
     def __init__(self):
         self._load_sprite_images()
 
         self.pos_util = PositionUtility()
-        self.color_util = ColorUtility()
     
     def _load_sprite_images(self):
+        ''' Init for global image dictionaries'''
         Hex.load_images()
         Token.load_images()
         Port.load_images()
     
-    def calculate_vertex_positions(self, tile_vertices, hex_sprites, hex_spacing) -> dict[int, tuple[float, float]]:
+    def calculate_vertex_positions(self, tile_vertices: dict[int, list[int]], hex_sprites: list[Hex], hex_spacing: list[int]) -> dict[int, tuple[float, float]]:
+        ''' Calculates each hex corner position on screen. Each hex corner is a vertex. Tuple containing pixel position is held in a dictionary mapped to the vertex id.'''
         vertex_positions = {i: (0.0, 0.0) for i in range(54)}
         
         for hex in hex_sprites:
@@ -30,6 +44,7 @@ class StaticSpriteLoader():
                 pos_offset_x = pos_offset[0]
                 pos_offset_y = pos_offset[1]
 
+                assert hex.rect is not None
                 pos_x_scaled = hex.rect.x + (pos_offset_x * hex_spacing[0])
                 pos_y_scaled = hex.rect.y + (pos_offset_y * hex_spacing[1])
 
@@ -37,7 +52,8 @@ class StaticSpriteLoader():
 
         return vertex_positions
 
-    def build_port_bridges(self, vertex_positions, ports) -> list[pygame.sprite.Sprite]:
+    def build_port_bridges(self, vertex_positions: dict[int, tuple[float, float]], ports: list[Port]) -> list[pygame.sprite.Sprite]:
+        ''' Calculates and returns where port bridges should be placed on screen. Port bridges span from the vertex position to the center of the port sprite.'''
         port_bridges = []
 
         for port in ports:
@@ -45,6 +61,7 @@ class StaticSpriteLoader():
             pos_v1 = vertex_positions[v1]
             pos_v2 = vertex_positions[v2]
 
+            assert port.rect is not None
             port_pos = port.rect.center
 
             angle_v1 = -math.degrees(math.atan2(pos_v1[1] - port_pos[1], pos_v1[0] - port_pos[0]))
@@ -58,7 +75,8 @@ class StaticSpriteLoader():
 
         return port_bridges
 
-    def _create_bridge(self, pos1, pos2, angle) -> pygame.sprite.Sprite:
+    def _create_bridge(self, pos1: tuple[float, float], pos2: tuple[float, float], angle: float) -> pygame.sprite.Sprite:
+        '''Helper to construct a single port bridge since multiple port bridges exist in a game.'''
         bridge = pygame.sprite.Sprite()
         
         width = int(math.dist(pos1, pos2))
@@ -74,7 +92,8 @@ class StaticSpriteLoader():
     
         return bridge
 
-    def _add_hex_sprite(self, hex_size, resource, hex_index, pos_x, pos_y) -> Hex:
+    def _add_hex_sprite(self, hex_size: int, resource: str, hex_index: int, pos_x: float, pos_y: float) -> Hex:
+        ''' Helper to construct a single Hex Sprite. '''
         hex = Hex(resource, (pos_x, pos_y ), hex_index)
         
         assert hex.image is not None
@@ -86,7 +105,8 @@ class StaticSpriteLoader():
         return hex
 
 
-    def _add_token_sprite(self, token_size, number, pos_x, pos_y) -> Token | None:
+    def _add_token_sprite(self, token_size: int, number: int, pos_x: float, pos_y: float) -> Token | None:
+        ''' Helper to construct a single Token Sprite '''
         token = None
 
         if number is not None:
@@ -101,7 +121,8 @@ class StaticSpriteLoader():
         
         return token
     
-    def _add_port_sprite(self, board, hex_spacing, port_size, hex_index, pos_x, pos_y) -> Port | None:
+    def _add_port_sprite(self, board: DefaultBoard, hex_spacing: list[int], port_size: int, hex_index: int, pos_x: float, pos_y: float) -> Port | None:
+        ''' Helper to construct a single Port Sprite'''
         tile_vertices = board.tile_vertices[hex_index]
         port = None
 
@@ -126,7 +147,26 @@ class StaticSpriteLoader():
 
         return port   
 
-    def load_static_sprites(self, board, land_hex_columns, sprite_config) -> tuple[list, list, list]:
+    def load_static_sprites(self, board: DefaultBoard, land_hex_columns: list[int], sprite_config) -> tuple[list, list, list]:
+        '''
+        Loads all static sprites once. 
+        
+        These sprites include land hexes, tokens associated with land hexes, port sprites and port bridges. 
+        The goal of load static sprites is to create and return the list of sprites as a reference. 
+        
+        The tuple returns as such: 
+        hex_sprites, token_sprites, port_sprites 
+        in that order. 
+        
+        Since these positions do not change, these sprite lists can be reused
+        and saved as copies after one call.
+        '''
+        hex_size: int
+        token_size: int
+        port_size: int
+        hex_spacing: list[int]
+        token_spacing: list[int]
+
         hex_size = sprite_config["hex_size"]
         token_size = sprite_config["token_size"]
         port_size = sprite_config["port_size"]
@@ -179,7 +219,14 @@ class StaticSpriteLoader():
 
         return hex_sprites, token_sprites, port_sprites
     
-    def load_background(self, window_res, hex_size, hex_spacing) -> pygame.Surface:
+    def load_background(self, window_res: list[int], hex_size: int, hex_spacing: list[int]) -> pygame.Surface:
+        ''' 
+        Loads the Sea Hexes into a background surface to be passed into camera group. 
+        Load background's goal is to be executed once, so that these sprites are never 
+        explicitly recalculated. The Background is returned as a surface for the camera
+        group to reblit as a copy on reloads.
+        '''
+
         sea_image = pygame.transform.scale(Hex.images['sea'], (hex_size, hex_size))
 
         #Sea Hexes Initial Start Position

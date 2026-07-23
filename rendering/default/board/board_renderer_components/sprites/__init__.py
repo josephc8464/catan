@@ -3,4 +3,4 @@ from .hex import Hex
 from .token import Token
 from .port import Port
 from .road import Road
-from .building import Building
+from .structure import Structure

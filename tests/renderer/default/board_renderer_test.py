@@ -5,6 +5,7 @@ sys.path.append('.')
 
 from rendering.default.board.board_renderer import DefaultBoardRenderer
 from game.board_presets.default.default_board import DefaultBoard
+from game.board_presets.default.test.test_board import TestBoard
 
 BASE_WIDTH, BASE_HEIGHT = 1920, 1080
 
@@ -157,6 +158,12 @@ def board_random_game(type_of_test=board_renderer_test):
             board.graph.set_edge_color(u, v, color)
 
     type_of_test(board)
+
+def test_board():
+    mock_board = TestBoard()
+    mock_board.setup_board()
+    
+    board_renderer_test(mock_board)
 
 def board_full_test():
     tests = [

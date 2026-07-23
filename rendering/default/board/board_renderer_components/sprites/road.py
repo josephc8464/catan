@@ -15,7 +15,7 @@ class Road(pygame.sprite.Sprite):
     
     @classmethod
     def load_images(cls):
-        cls.road_image = pygame.image.load("graphics/default/buildings/road_icon.png").convert_alpha()
+        cls.road_image = pygame.image.load("graphics/default/buildables/road_icon.png").convert_alpha()
 
     def _get_color_road(self, color):
         color_util = ColorUtility()
