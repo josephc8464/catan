@@ -10,6 +10,14 @@ class BoardContext:
         'year_of_plenty':0,
         'monopoly':      0,
     }
+
+    DEVELOPMENT_CARDS_PLAY_COOLDOWN = {
+        'knight':        True,
+        'victory_point': False,
+        'road_building': True,
+        'year_of_plenty':True,
+        'monopoly':      True,
+    }
     
     BUILDING_COSTS = {
         'settlement': {'wood': 1, 'brick': 1, 'sheep': 1, 'wheat': 1},
@@ -90,11 +98,10 @@ class BoardContext:
         
     def is_valid_award(self, award_name: str) -> bool:
         return award_name in self.AWARDS
-
+    
     # ==========================================
     # GETTERS (Safely retrieve data without KeyError crashes)
     # ==========================================
-
     def get_cost(self, item_name: str) -> dict[str, int]:
         """Returns the dictionary of costs, or an empty dict if invalid."""
         return self.BUILDING_COSTS.get(item_name, {})
@@ -135,3 +142,11 @@ class BoardContext:
     def get_bank_ratio(self) -> tuple[int, int]:
         """Returns the trade ratio of the bank."""
         return self.BANK_RATIO
+    
+    # ==========================================
+    # QUERIES 
+    # ==========================================
+    
+    def has_cooldown(self, card: str) -> bool:
+        """ Returns whether a card can be played directly after being bought."""
+        return self.DEVELOPMENT_CARDS_PLAY_COOLDOWN.get(card, True)
