@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import MagicMock
 from tests.game.default.game_controller.conftest_base import BaseControllerTest
 
 
@@ -91,7 +92,15 @@ class TestBuildRoad(BaseControllerTest):
     # -------------------------------------------------------------------------
     # FAIL EDGE CHECKS (PAID)
     # -------------------------------------------------------------------------
-
+    def test_fails_cost_not_found(self):
+        """Purchase must fail if the cost lookup returns None."""
+        self.controller.board_context.get_cost = MagicMock(return_value=None)
+        result = self.controller.build_road(self.v1, self.v2, self.p1)
+        
+        self.assertFalse(result)
+        self.p1.remove_resources.assert_not_called()
+        self.p1.add_dev_card.assert_not_called()
+        
     def test_fails_edge_not_exist(self):
         self.board.has_edge.return_value = False
         result = self.controller.build_road(self.v1, self.v2, self.p1)
