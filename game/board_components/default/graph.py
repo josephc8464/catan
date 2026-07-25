@@ -50,7 +50,7 @@ class Graph:
         Used exclusively for rollback operations (e.g., failed Road Building card).
         Returns True on success, False if edge not found.
         """
-        # FIX: Dedicated rollback method — set_edge_color cannot write None
+
         if (u, v) in self.edge_color:
             self.edge_color[(u, v)] = None
             self.edge_color[(v, u)] = None
