@@ -387,6 +387,9 @@ class GameController:
         if not self._is_turn(player):
             return False
 
+        if not self._has_rolled(player):
+            return False
+        
         if not cost:
             logging.error(GameMsg.err_not_in_board_context(dev_card, 'BUILDING_COSTS'))
             return False
@@ -445,11 +448,11 @@ class GameController:
             logging.info(GameMsg.err_max_pieces(player.name, road))
             return False
 
-        self.board.add_road(vertex1, vertex2, player.color)
-        player.add_road(vertex1, vertex2)
-
         if not free:
             player.remove_resources(cost)
+        
+        self.board.add_road(vertex1, vertex2, player.color)
+        player.add_road(vertex1, vertex2)
 
         logging.info(GameMsg.success_build_road(player.name, vertex1, vertex2))
         return True
