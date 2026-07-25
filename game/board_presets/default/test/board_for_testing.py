@@ -1,7 +1,7 @@
 from game.board_presets.default.default_board import DefaultBoard
 from game.board_components.default import Tile
 
-class TestBoard(DefaultBoard):
+class BoardForTesting(DefaultBoard):
     """
     A deterministic version of DefaultBoard for headless testing.
     Overrides randomization methods to remove shuffle() calls.
