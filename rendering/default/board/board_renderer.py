@@ -65,7 +65,7 @@ class DefaultBoardRenderer():
         self.buildings_dirty = True
 
         # --- Graph Positioning ---
-        self.vertex_positions = {i: None for i in range(54)}
+        self.vertex_positions = {i: (0.0, 0.0) for i in range(54)}
 
         # --- Hex Config ---
         self.hex_size = int(200 * self.scale)
