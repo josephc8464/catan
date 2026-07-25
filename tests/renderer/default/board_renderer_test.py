@@ -5,7 +5,7 @@ sys.path.append('.')
 
 from rendering.default.board.board_renderer import DefaultBoardRenderer
 from game.board_presets.default.default_board import DefaultBoard
-from game.board_presets.default.test.test_board import TestBoard
+from game.board_presets.default.test.board_for_testing import BoardForTesting
 
 BASE_WIDTH, BASE_HEIGHT = 1920, 1080
 
@@ -150,7 +150,7 @@ def board_random_game(type_of_test=board_renderer_test):
         if random.random() < 0.5:  # 50% chance a vertex has a building
             color = random.choice(colors)
             building_type = random.choice(building_types)
-            board.add_building(vertex_id, color, building_type)
+            board.add_structure(vertex_id, color, building_type)
 
     for (u, v) in list(board.graph.edge_color.keys()):
         if u < v and random.random() < 0.5:  # 50% chance an edge has a road
@@ -160,7 +160,7 @@ def board_random_game(type_of_test=board_renderer_test):
     type_of_test(board)
 
 def test_board():
-    mock_board = TestBoard()
+    mock_board = BoardForTesting()
     mock_board.setup_board()
     
     board_renderer_test(mock_board)
