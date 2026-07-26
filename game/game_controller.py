@@ -783,7 +783,6 @@ class GameController:
         Ends the current player's turn.
         Triggers dev card cooldown processing before advancing to the next player.
         """
-        # FIX: Trigger cooldown processing so newly bought cards become active next turn
         current_player = self.turn_manager.get_current_player()
         current_player.update_dev_cards()
         self.turn_manager.next_turn()
