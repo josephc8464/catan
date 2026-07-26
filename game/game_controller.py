@@ -166,7 +166,7 @@ class GameController:
             if tile.tile_id == self.board.robber_placement:
                 logging.info(f'Robber placed at tile {tile.tile_id}, no resources collected')
                 continue
-            
+
             verts = self.board.get_tile_vertices(tile.tile_id)
 
             if verts is None:
@@ -194,8 +194,8 @@ class GameController:
                 if player.color in player_collects:
                     collect = player_collects[player.color][resource]
                     if collect > 0:
-                        player.add_resource(resource, collect)
                         self.board.remove_bank_resource(resource, collect)
+                        player.add_resource(resource, collect)
 
         return True
 
@@ -221,9 +221,8 @@ class GameController:
         Steals one resource card from the victim and gives it to the robber.
         The stolen card is chosen by index into a shuffled resource list,
         falling back to random.choice if selection is out of bounds.
-        Returns False if the victim has no resources, or if robber == victim.
+        Returns False if robber == victim.
         """
-        # FIX: Prevent stealing from yourself
         if robber == victim:
             logging.info(GameMsg.err_steal_self(robber.name))
             return False
@@ -236,7 +235,7 @@ class GameController:
 
         if not resource_list:
             logging.info(GameMsg.err_no_resources_to_steal(victim.name))
-            return False
+            return True
 
         random.shuffle(resource_list)
 
@@ -247,8 +246,9 @@ class GameController:
         )
 
         logging.info(GameMsg.info_stole_resource_from(robber.name, stolen, victim.name))
-        robber.add_resource(stolen, 1)
         victim.remove_resource(stolen, 1)
+        robber.add_resource(stolen, 1)
+
         return True
 
     # =========================================================================
