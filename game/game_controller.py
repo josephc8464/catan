@@ -517,8 +517,11 @@ class GameController:
         if not self._is_turn(player):
             return False
 
+        if not self._has_rolled(player) and not init_setup:
+            return False
+        
         if not starting_building:
-            logging.error(GameMsg.err_not_in_board_context(starting_building, 'STRUCTURE_TYPES'))
+            logging.error(GameMsg.err_not_in_board_context('starting building', 'STRUCTURE_TYPES'))
             return False
 
         if not cost:
@@ -545,11 +548,12 @@ class GameController:
             logging.info(GameMsg.err_max_pieces(player.name, starting_building))
             return False
 
+        if not init_setup:
+            player.remove_resources(cost)
+        
         self.board.add_structure(vertex, player.color, starting_building)
         player.add_structure(vertex, starting_building)
 
-        if not init_setup:
-            player.remove_resources(cost)
 
         logging.info(GameMsg.success_build_structure(player.name, starting_building, vertex))
         return True

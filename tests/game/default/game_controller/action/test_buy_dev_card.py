@@ -6,9 +6,6 @@ from tests.game.default.game_controller.conftest_base import BaseControllerTest
 class TestBuyDevCard(BaseControllerTest):
     """
     Unit tests for GameController.buy_dev_card().
-
-    Key guards: TURN, CAN_AFFORD, deck must not be empty.
-    Resources must only be removed AFTER a card is confirmed available [3].
     """
 
     def setUp(self):
