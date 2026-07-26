@@ -263,7 +263,9 @@ class GameController:
         if not self._is_turn(player):
             return False
 
-        # FIX: Prevent trading a resource for itself
+        if not self._has_rolled(player):
+            return False
+        
         if resource_in == resource_out:
             logging.info(GameMsg.err_trade_same_resource(resource_in))
             return False
@@ -305,6 +307,9 @@ class GameController:
         if not self._is_turn(player):
             return False
 
+        if not self._has_rolled(player):
+            return False
+        
         port_resource = self.board.get_port(vertices)
         if port_resource is None:
             logging.warning(GameMsg.err_no_port(vertices))
@@ -348,10 +353,16 @@ class GameController:
         Only player1 (the initiator) must be the active player.
         player1 offers res_req1 and receives res_req2 in return.
         """
-        # FIX: Only the current player (initiator) needs to be active
         if not self._is_turn(player1):
             return False
 
+        if not self._has_rolled(player1):
+            return False
+
+        if player1 == player2:
+            logging.info(f"{player1.name} cannot trade with yourself")
+            return False
+        
         if not self.board_context.is_valid_resource_cost(res_req1):
             logging.error(GameMsg.err_not_valid_cost(res_req1))
             return False
