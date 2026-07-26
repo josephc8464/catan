@@ -468,6 +468,9 @@ class GameController:
         if not self._is_turn(player):
             return False
 
+        if not self._has_rolled(player):
+            return False
+        
         if current_type is None:
             logging.info(GameMsg.err_no_structure(vertex))
             return False
@@ -494,10 +497,8 @@ class GameController:
             logging.info(GameMsg.err_max_pieces(player.name, next_type))
             return False
 
-        # FIX: Remove old structure from player list, add upgraded one
-        # This also returns the settlement piece to the player's supply
-        player.remove_structure(vertex)
         player.remove_resources(cost)
+        player.remove_structure(vertex)
         self.board.add_structure(vertex, player.color, next_type)
         player.add_structure(vertex, next_type)
 
