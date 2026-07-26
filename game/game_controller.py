@@ -749,13 +749,14 @@ class GameController:
             logging.info(GameMsg.err_max_pieces(player.name, 'road'))
             return False
 
-        if not self.build_road(v1, v2, player, free=True):
+        road_one_success = self.build_road(v1, v2, player, free=True)
+        if not road_one_success:
             logging.info(GameMsg.err_road_building_failed(v1, v2))
             return False
 
-        if not self.build_road(v3, v4, player, free=True):
+        road_two_success = self.build_road(v3, v4, player, free=True)
+        if not road_two_success:
             logging.info(GameMsg.err_road_building_failed(v3, v4))
-            # FIX: Rollback first road using the dedicated clear method
             self.board.graph.clear_edge_color(v1, v2)
             player.roads.remove((v1, v2))
             return False
