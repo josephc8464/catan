@@ -266,6 +266,17 @@ class DefaultBoard:
                 return (pair, resource)
         return None
 
+    def get_tile_vertices(self, tile_id: int) -> list[int] | None:
+        """Retrieves the list of vertex IDs that form the perimeter of a given tile.
+
+        Args:
+            tile_id: The ID of the tile to query.
+
+        Returns:
+            A list of 6 vertex IDs belonging to the tile, or None if the tile_id is invalid.
+        """
+        return self.tile_vertices.get(tile_id, None)
+
     def get_structure(self, vertex: int) -> tuple[str | None, str | None]:
         """ Returns a structure at a given vertex, or (None, None) if it doesn't exist.
 

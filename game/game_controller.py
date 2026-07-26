@@ -36,10 +36,6 @@ class GameController:
             logging.info(GameMsg.err_dice_not_rolled(player.name))
             return False
         return True
-    
-    def _get_player_by_color(self, color: str) -> Player | None:
-        """Returns the player object matching a given color string, or None."""
-        return next((p for p in self.players if p.color == color), None)
 
     # =========================================================================
     # --- SETUP PHASE ---
@@ -155,7 +151,7 @@ class GameController:
         """
         if roll == 7:
             logging.info(GameMsg.info_rolled_seven(roll))
-            return False
+            return True
 
         hexes = [
             tile for tile in self.board.tiles.values()
@@ -167,12 +163,21 @@ class GameController:
         player_collects: dict[str, dict[str, int]] = {}
 
         for tile in hexes:
-            verts = self.board.tile_vertices[tile.tile_id]
+            if tile.tile_id == self.board.robber_placement:
+                logging.info(f'Robber placed at tile {tile.tile_id}, no resources collected')
+                continue
+            
+            verts = self.board.get_tile_vertices(tile.tile_id)
+
+            if verts is None:
+                logging.error(f'TILE VERTICES FOR TILE {tile.tile_id} NOT DEFINED IN BOARD')
+                continue
+    
             for vertex in verts:
                 level, owner = self.board.get_structure(vertex)
                 if level is not None and owner is not None:
                     player_collects.setdefault(owner, dict.fromkeys(self.board_context.RESOURCES, 0))
-                    amount = self.board_context.STRUCTURE_RESOURCES.get(level, 0)
+                    amount = self.board_context.get_resource_yield(level)
                     player_collects[owner][tile.resource] += amount
                     total[tile.resource] += amount
 
@@ -183,7 +188,6 @@ class GameController:
 
             if not self.board.bank_has_resource(resource, demand):
                 logging.info(GameMsg.err_bank_not_enough(resource))
-                # Per official rules: nobody gets this resource this round
                 continue
 
             for player in self.players:
