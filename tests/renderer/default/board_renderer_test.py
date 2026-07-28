@@ -101,9 +101,9 @@ def board_all_roads(type_of_test=board_renderer_test):
 
     type_of_test(board)
 
-def build_all_buildings(board, type="settlement", color="red"):
+def build_all_buildings(board: DefaultBoard, type="settlement", color="red"):
     for i in range(54):
-        board.buildings[i] = (type, color)
+        board.structures[i] = (type, color)
 
 def board_all_settlements(type_of_test=board_renderer_test):
     board = DefaultBoard()
