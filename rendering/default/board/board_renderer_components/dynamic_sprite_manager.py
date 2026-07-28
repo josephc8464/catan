@@ -78,7 +78,7 @@ class DynamicSpriteManager():
         ''' Creates new building sprites. Positioning based entirely on vertex positions dict.'''
         building_sprites = []
 
-        for i, building in self.board.buildings.items():
+        for i, building in self.board.structures.items():
 
             if building != (None, None):
                 building_type, color = building
