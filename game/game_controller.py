@@ -11,16 +11,32 @@ class GameController:
     """
     Orchestrates all game actions and enforces Catan rule logic.
     Acts as the single authority between the board state, players, and turn flow.
+
+    Return value contract:
+        True      — action succeeded, state was mutated.
+        False     — action was rejected due to a valid game state condition
+                    (wrong turn, insufficient funds, occupied vertex, etc.).
+        ValueError — caller passed input not defined in BoardContext
+                    (unknown resource, card, or structure type). This is a
+                    programming error, not a recoverable game condition.
     """
 
-    def __init__(self, board: DefaultBoard, players: list[Player], turn_manager: TurnManager, board_context: BoardContext):
+    def __init__(
+        self,
+        board: DefaultBoard,
+        players: list[Player],
+        turn_manager: TurnManager,
+        board_context: BoardContext
+    ):
         self.board = board
         self.players = players
         self.turn_manager = turn_manager
         self.board_context = board_context
 
     # =========================================================================
+
     # --- HELPERS ---
+
     # =========================================================================
 
     def _is_turn(self, player: Player) -> bool:
@@ -31,14 +47,39 @@ class GameController:
         return True
 
     def _has_rolled(self, player: Player) -> bool:
-        """Returns True if the current player has rolled"""
+        """Returns True if the current player has already rolled this turn."""
         if not self.turn_manager.dice_rolled:
             logging.info(GameMsg.err_dice_not_rolled(player.name))
             return False
         return True
 
+    def _check_dev_card_preconditions(self, player: Player, dev_card: str, require_roll: bool = True) -> bool:
+        """
+        Shared guard for all dev card plays.
+        Validates turn order, one-card-per-turn rule, dice roll requirement, and card possession.
+        Returns False with appropriate logging if any precondition fails.
+        """
+        if not self._is_turn(player):
+            return False
+
+        if self.turn_manager.played_dev_card:
+            logging.info(GameMsg.err_dev_card_already_played(player.name))
+            return False
+
+        if require_roll and not self.turn_manager.dice_rolled:
+            logging.info(GameMsg.err_dice_not_rolled(player.name))
+            return False
+
+        if not player.has_dev_card(dev_card):
+            logging.info(GameMsg.err_no_dev_card(player.name, dev_card))
+            return False
+
+        return True
+
     # =========================================================================
+
     # --- SETUP PHASE ---
+
     # =========================================================================
 
     def place_initial_settlement(self, player: Player, vertex: int) -> bool:
@@ -62,7 +103,7 @@ class GameController:
             return False
 
         self.board.add_structure(vertex, player.color, structure)
-        player.structures.append((vertex, structure))
+        player.add_structure(vertex, structure)
 
         logging.info(GameMsg.success_build_structure(player.name, structure, vertex))
         return True
@@ -76,11 +117,10 @@ class GameController:
         if not self.place_initial_settlement(player, vertex):
             return False
 
-        # Grant one resource per adjacent producing tile
         for tile_id, verts in self.board.tile_vertices.items():
             if vertex in verts:
                 tile = self.board.tiles.get(tile_id)
-                if tile and tile.resource in self.board_context.RESOURCES:
+                if tile and tile.is_productive:
                     if self.board.bank_has_resource(tile.resource, 1):
                         player.add_resource(tile.resource, 1)
                         self.board.remove_bank_resource(tile.resource, 1)
@@ -113,13 +153,15 @@ class GameController:
             return False
 
         self.board.add_road(vertex1, vertex2, player.color)
-        player.roads.append((vertex1, vertex2))
+        player.add_road(vertex1, vertex2)
 
         logging.info(GameMsg.success_build_road(player.name, vertex1, vertex2))
         return True
 
     # =========================================================================
+
     # --- DICE PHASE ---
+
     # =========================================================================
 
     def roll_dice(self, player: Player) -> tuple[int, int]:
@@ -151,28 +193,24 @@ class GameController:
         """
         if roll == 7:
             logging.info(GameMsg.info_rolled_seven(roll))
-            return True
+            return False
 
-        hexes = [
-            tile for tile in self.board.tiles.values()
-            if tile.number == roll and tile.resource in self.board_context.RESOURCES
-        ]
+        hexes = [tile for tile in self.board.tiles.values() if tile.produces_on_roll(roll)]
 
-        # Tally what each player should collect, and the total per resource
         total: dict[str, int] = dict.fromkeys(self.board_context.RESOURCES, 0)
         player_collects: dict[str, dict[str, int]] = {}
 
         for tile in hexes:
             if tile.tile_id == self.board.robber_placement:
-                logging.info(f'Robber placed at tile {tile.tile_id}, no resources collected')
+                logging.info(f"Robber on tile {tile.tile_id} — no resources collected.")
                 continue
 
             verts = self.board.get_tile_vertices(tile.tile_id)
 
             if verts is None:
-                logging.error(f'TILE VERTICES FOR TILE {tile.tile_id} NOT DEFINED IN BOARD')
+                logging.error(f"TILE VERTICES FOR TILE {tile.tile_id} NOT DEFINED IN BOARD")
                 continue
-    
+
             for vertex in verts:
                 level, owner = self.board.get_structure(vertex)
                 if level is not None and owner is not None:
@@ -181,7 +219,6 @@ class GameController:
                     player_collects[owner][tile.resource] += amount
                     total[tile.resource] += amount
 
-        # Distribute only if bank can cover the full demand for each resource
         for resource, demand in total.items():
             if demand == 0:
                 continue
@@ -200,7 +237,9 @@ class GameController:
         return True
 
     # =========================================================================
+
     # --- ROBBER & STEALING ---
+
     # =========================================================================
 
     def move_robber(self, tile_id: int) -> bool:
@@ -252,35 +291,29 @@ class GameController:
         return True
 
     # =========================================================================
+
     # --- TRADE PHASE ---
+
     # =========================================================================
 
     def trade_bank(self, player: Player, resource_in: str, resource_out: str) -> bool:
         """
         Executes a standard 4:1 trade with the bank.
         Validates turn, affordability, bank stock, and that the resources differ.
+        Raises ValueError if either resource is not defined in BoardContext.
         """
         if not self._is_turn(player):
             return False
 
         if not self._has_rolled(player):
             return False
-        
+
         if resource_in == resource_out:
             logging.info(GameMsg.err_trade_same_resource(resource_in))
             return False
 
-        bank_ratio = self.board_context.get_bank_ratio()
-        if bank_ratio is None:
-            logging.warning(GameMsg.err_not_in_board_context('bank ratio', 'BANK_RATIO'))
-            return False
-
-        ratio_in, ratio_out = bank_ratio
+        ratio_in, ratio_out = self.board_context.BANK_RATIO
         cost = {resource_in: ratio_in}
-
-        if not self.board_context.is_valid_resource_cost(cost):
-            logging.warning(GameMsg.err_not_valid_cost(cost))
-            return False
 
         if not player.can_afford(cost):
             logging.info(GameMsg.info_trade_cant_afford(player.name))
@@ -298,23 +331,29 @@ class GameController:
         logging.info(GameMsg.info_trade_success(player.name, 'bank'))
         return True
 
-    def trade_port(self, player: Player, vertices: tuple[int, int],
-                   resource_in: str, resource_out: str) -> bool:
+    def trade_port(
+        self,
+        player: Player,
+        vertices: tuple[int, int],
+        resource_in: str,
+        resource_out: str
+    ) -> bool:
         """
         Executes a trade at a maritime port (3:1 generic or 2:1 specific).
         Player must own a settlement or city on one of the port's two vertices.
+        Raises ValueError if either resource is not defined in BoardContext.
         """
         if not self._is_turn(player):
             return False
 
         if not self._has_rolled(player):
             return False
-        
+
         port_resource = self.board.get_port(vertices)
         if port_resource is None:
             logging.warning(GameMsg.err_no_port(vertices))
             return False
-        
+
         _, v1_owner = self.board.get_structure(vertices[0])
         _, v2_owner = self.board.get_structure(vertices[1])
 
@@ -346,12 +385,18 @@ class GameController:
         logging.info(GameMsg.info_trade_success(player.name, f'Port ({port_resource})'))
         return True
 
-    def trade_player(self, player1: Player, player2: Player,
-                     res_req1: dict, res_req2: dict) -> bool:
+    def trade_player(
+        self,
+        player1: Player,
+        player2: Player,
+        res_req1: dict[str, int],
+        res_req2: dict[str, int]
+    ) -> bool:
         """
         Executes a domestic trade between two players.
         Only player1 (the initiator) must be the active player.
         player1 offers res_req1 and receives res_req2 in return.
+        Raises ValueError if any resource in either map is not defined in BoardContext.
         """
         if not self._is_turn(player1):
             return False
@@ -360,15 +405,7 @@ class GameController:
             return False
 
         if player1 == player2:
-            logging.info(f"{player1.name} cannot trade with yourself")
-            return False
-        
-        if not self.board_context.is_valid_resource_cost(res_req1):
-            logging.error(GameMsg.err_not_valid_cost(res_req1))
-            return False
-
-        if not self.board_context.is_valid_resource_cost(res_req2):
-            logging.error(GameMsg.err_not_valid_cost(res_req2))
+            logging.info(f"{player1.name} cannot trade with themselves.")
             return False
 
         if not player1.can_afford(res_req1):
@@ -388,7 +425,9 @@ class GameController:
         return True
 
     # =========================================================================
+
     # --- ACTION PHASE ---
+
     # =========================================================================
 
     def buy_dev_card(self, player: Player) -> bool:
@@ -396,17 +435,12 @@ class GameController:
         Purchases the top development card from the deck.
         Validates turn, affordability, and deck availability before mutating state.
         """
-        dev_card = 'dev_card'
-        cost = self.board_context.get_cost(dev_card)
+        cost = self.board_context.get_cost('dev_card')
 
         if not self._is_turn(player):
             return False
 
         if not self._has_rolled(player):
-            return False
-        
-        if not cost:
-            logging.error(GameMsg.err_not_in_board_context(dev_card, 'BUILDING_COSTS'))
             return False
 
         if not player.can_afford(cost):
@@ -430,25 +464,16 @@ class GameController:
         Validates edge existence, occupancy, network connectivity, and piece count.
         Pass free=True to skip resource cost (e.g. Road Building card).
         """
-        road = 'road'
-        cost = self.board_context.get_cost(road)
+        cost = self.board_context.get_cost('road')
 
         if not self._is_turn(player):
             return False
 
         if not self._has_rolled(player) and not free:
             return False
-        
-        if not cost:
-            logging.error(GameMsg.err_not_in_board_context(road, 'BUILDING_COSTS'))
-            return False
 
         if not free and not player.can_afford(cost):
-            logging.info(GameMsg.err_cant_afford(player.name, road))
-            return False
-
-        if not self.board.has_edge(vertex1, vertex2):
-            logging.warning(GameMsg.err_edge_not_exist(vertex1, vertex2))
+            logging.info(GameMsg.err_cant_afford(player.name, 'road'))
             return False
 
         if self.board.get_road_color(vertex1, vertex2) is not None:
@@ -459,13 +484,13 @@ class GameController:
             logging.info(GameMsg.err_road_connection(player.name, vertex1, vertex2))
             return False
 
-        if not player.has_available_pieces(road):
-            logging.info(GameMsg.err_max_pieces(player.name, road))
+        if not player.has_available_pieces('road'):
+            logging.info(GameMsg.err_max_pieces(player.name, 'road'))
             return False
 
         if not free:
             player.remove_resources(cost)
-        
+
         self.board.add_road(vertex1, vertex2, player.color)
         player.add_road(vertex1, vertex2)
 
@@ -485,7 +510,7 @@ class GameController:
 
         if not self._has_rolled(player):
             return False
-        
+
         if current_type is None:
             logging.info(GameMsg.err_no_structure(vertex))
             return False
@@ -500,9 +525,6 @@ class GameController:
             return False
 
         cost = self.board_context.get_cost(next_type)
-        if not cost:
-            logging.error(GameMsg.err_not_in_board_context(next_type, 'BUILDING_COSTS'))
-            return False
 
         if not player.can_afford(cost):
             logging.info(GameMsg.err_cant_afford(player.name, next_type))
@@ -535,14 +557,6 @@ class GameController:
 
         if not self._has_rolled(player) and not init_setup:
             return False
-        
-        if not starting_building:
-            logging.error(GameMsg.err_not_in_board_context('starting building', 'STRUCTURE_TYPES'))
-            return False
-
-        if not cost:
-            logging.error(GameMsg.err_not_in_board_context(starting_building, 'BUILDING_COSTS'))
-            return False
 
         if not init_setup and not player.can_afford(cost):
             logging.info(GameMsg.err_cant_afford(player.name, starting_building))
@@ -566,37 +580,29 @@ class GameController:
 
         if not init_setup:
             player.remove_resources(cost)
-        
+
         self.board.add_structure(vertex, player.color, starting_building)
         player.add_structure(vertex, starting_building)
-
 
         logging.info(GameMsg.success_build_structure(player.name, starting_building, vertex))
         return True
 
     # =========================================================================
+
     # --- ANY PHASE ---
+
     # =========================================================================
 
-    def play_knight(self, player: Player, tile_id: int,
-                    victim: Player, selection: int) -> bool:
+    def play_knight(self, player: Player, tile_id: int, victim: Player, selection: int) -> bool:
         """
         Plays a Knight development card.
         Moves the robber to a new tile and steals one resource from the victim.
-        Knight may be played before or after rolling — no dice_rolled check applied.
+        Knight may be played before or after rolling — require_roll=False.
         All preconditions are validated before any state mutation occurs.
         """
         dev_card = 'knight'
 
-        if not self._is_turn(player):
-            return False
-
-        if self.turn_manager.played_dev_card:
-            logging.info(GameMsg.err_dev_card_already_played(player.name))
-            return False
-
-        if not player.has_dev_card(dev_card):
-            logging.info(GameMsg.err_no_dev_card(player.name, dev_card))
+        if not self._check_dev_card_preconditions(player, dev_card, require_roll=False):
             return False
 
         if tile_id == self.board.robber_placement:
@@ -612,7 +618,6 @@ class GameController:
             logging.info(GameMsg.err_no_resources_to_steal(victim.name))
             return False
 
-        # All checks passed — safe to mutate
         self.move_robber(tile_id)
         self.steal(selection, player, victim)
         player.remove_dev_card(dev_card)
@@ -626,28 +631,14 @@ class GameController:
         Plays a Monopoly development card.
         Steals all cards of the chosen resource from every other player.
         Must be played after rolling the dice.
+        Raises ValueError if resource is not defined in BoardContext.
         """
         dev_card = 'monopoly'
 
-        if not self._is_turn(player):
+        if not self._check_dev_card_preconditions(player, dev_card):
             return False
 
-        if self.turn_manager.played_dev_card:
-            logging.info(GameMsg.err_dev_card_already_played(player.name))
-            return False
-
-        # FIX: Enforce dice-first rule for non-knight dev cards
-        if not self.turn_manager.dice_rolled:
-            logging.info(GameMsg.err_dice_not_rolled(player.name))
-            return False
-
-        if not player.has_dev_card(dev_card):
-            logging.info(GameMsg.err_no_dev_card(player.name, dev_card))
-            return False
-
-        if resource not in self.board_context.RESOURCES:
-            logging.warning(GameMsg.err_not_in_board_context(resource, 'RESOURCES'))
-            return False
+        self.board_context.validate_resource(resource)
 
         for victim in self.players:
             if victim == player:
@@ -655,8 +646,8 @@ class GameController:
             amount = victim.resources.get(resource, 0)
             if amount > 0:
                 logging.info(GameMsg.info_stole_resource_from(player.name, resource, victim.name))
-                player.add_resource(resource, amount)
                 victim.remove_resource(resource, amount)
+                player.add_resource(resource, amount)
 
         player.remove_dev_card(dev_card)
         self.turn_manager.set_played_dev_card()
@@ -668,34 +659,16 @@ class GameController:
         Plays a Year of Plenty development card.
         Grants the player any two resources directly from the bank.
         Must be played after rolling the dice.
+        Raises ValueError if either resource is not defined in BoardContext.
         """
         dev_card = 'year_of_plenty'
 
-        if not self._is_turn(player):
+        if not self._check_dev_card_preconditions(player, dev_card):
             return False
 
-        if self.turn_manager.played_dev_card:
-            logging.info(GameMsg.err_dev_card_already_played(player.name))
-            return False
+        self.board_context.validate_resource(resource1)
+        self.board_context.validate_resource(resource2)
 
-        # FIX: Enforce dice-first rule for non-knight dev cards
-        if not self.turn_manager.dice_rolled:
-            logging.info(GameMsg.err_dice_not_rolled(player.name))
-            return False
-
-        if not player.has_dev_card(dev_card):
-            logging.info(GameMsg.err_no_dev_card(player.name, dev_card))
-            return False
-
-        if not self.board_context.is_valid_resource(resource1):
-            logging.warning(GameMsg.err_not_in_board_context(resource1, 'RESOURCES'))
-            return False
-
-        if not self.board_context.is_valid_resource(resource2):
-            logging.warning(GameMsg.err_not_in_board_context(resource2, 'RESOURCES'))
-            return False
-
-        # Check bank stock, handling the case where both resources are the same
         if resource1 == resource2:
             if not self.board.bank_has_resource(resource1, 2):
                 logging.info(GameMsg.err_bank_empty(resource1))
@@ -708,7 +681,6 @@ class GameController:
                 logging.info(GameMsg.err_bank_empty(resource2))
                 return False
 
-        # FIX: Give to player first so bank debit is never orphaned
         player.add_resource(resource1, 1)
         player.add_resource(resource2, 1)
         self.board.remove_bank_resource(resource1, 1)
@@ -719,8 +691,7 @@ class GameController:
         logging.info(GameMsg.success_dev_card(player.name, dev_card))
         return True
 
-    def play_road_building(self, player: Player,
-                           v1: int, v2: int, v3: int, v4: int) -> bool:
+    def play_road_building(self, player: Player, v1: int, v2: int, v3: int, v4: int) -> bool:
         """
         Plays a Road Building development card, placing two free roads atomically.
         If the second road fails, the first is rolled back entirely.
@@ -729,36 +700,22 @@ class GameController:
         """
         dev_card = 'road_building'
 
-        if not self._is_turn(player):
+        if not self._check_dev_card_preconditions(player, dev_card):
             return False
 
-        if self.turn_manager.played_dev_card:
-            logging.info(GameMsg.err_dev_card_already_played(player.name))
-            return False
-
-        if not self.turn_manager.dice_rolled:
-            logging.info(GameMsg.err_dice_not_rolled(player.name))
-            return False
-
-        if not player.has_dev_card(dev_card):
-            logging.warning(GameMsg.err_no_dev_card(player.name, dev_card))
-            return False
-
-        roads_remaining = self.board_context.get_max_pieces('road') - player.count_roads()
+        roads_remaining = self.board_context.get_max_pieces('road') - len(player.roads)
         if roads_remaining < 2:
             logging.info(GameMsg.err_max_pieces(player.name, 'road'))
             return False
 
-        road_one_success = self.build_road(v1, v2, player, free=True)
-        if not road_one_success:
+        if not self.build_road(v1, v2, player, free=True):
             logging.info(GameMsg.err_road_building_failed(v1, v2))
             return False
 
-        road_two_success = self.build_road(v3, v4, player, free=True)
-        if not road_two_success:
+        if not self.build_road(v3, v4, player, free=True):
             logging.info(GameMsg.err_road_building_failed(v3, v4))
             self.board.graph.clear_edge_color(v1, v2)
-            player.roads.remove((v1, v2))
+            player.remove_road(v1, v2)
             return False
 
         player.remove_dev_card(dev_card)
@@ -767,7 +724,9 @@ class GameController:
         return True
 
     # =========================================================================
+
     # --- VICTORY ---
+
     # =========================================================================
 
     def check_victory(self, player: Player) -> bool:
@@ -787,7 +746,9 @@ class GameController:
         return total >= self.board_context.WINNING_VP_THRESHOLD
 
     # =========================================================================
+
     # --- TURN MANAGEMENT ---
+
     # =========================================================================
 
     def end_turn(self) -> None:
