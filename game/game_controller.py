@@ -469,7 +469,7 @@ class GameController:
         if not self._is_turn(player):
             return False
 
-        if not self._has_rolled(player) and not free:
+        if not free and not self._has_rolled(player):
             return False
 
         if not free and not player.can_afford(cost):
@@ -555,7 +555,7 @@ class GameController:
         if not self._is_turn(player):
             return False
 
-        if not self._has_rolled(player) and not init_setup:
+        if not init_setup and not self._has_rolled(player):
             return False
 
         if not init_setup and not player.can_afford(cost):
