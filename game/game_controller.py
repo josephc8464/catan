@@ -184,13 +184,16 @@ class GameController:
 
         return (first_roll, second_roll)
 
-    def _distribute_resources(self, roll: int) -> bool:
+    def _distribute_resources(self, roll: int | None) -> bool:
         """
         Distributes resources to all players based on the dice roll and current board state.
         Returns False on a roll of 7 (robber activation), True otherwise.
         Per Catan rules, if the bank cannot cover the total demand for a resource,
         NO player receives that resource for this roll.
         """
+        if roll is None:
+            raise ValueError("Roll cannot be type None")
+        
         if roll == 7:
             logging.info(GameMsg.info_rolled_seven(roll))
             return False

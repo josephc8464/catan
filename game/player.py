@@ -22,6 +22,12 @@ class Player:
 
     board_context: ClassVar[BoardContext] = BoardContext()
 
+    @classmethod
+    def create(cls, name: str, color: str, context: BoardContext) -> "Player":
+        """Factory method that constructs a Player with initialized resource counts."""
+        initial_resources = {res: 0 for res in context.RESOURCES}
+        return cls(name=name, color=color, resources=initial_resources)
+    
     # =========================================================================
 
     # --- HELPERS ---

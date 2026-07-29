@@ -27,14 +27,15 @@ def game() -> GameSetup:
     board = DefaultBoard()
     board.setup_board()
 
-    p1 = Player('Alice', 'red')
-    p2 = Player('Bob', 'blue')
-    p3 = Player('Eve', 'green')
-    p4 = Player('Joseph', 'purple')
+    context = BoardContext()
+
+    p1 = Player.create('Alice', 'red', context)
+    p2 = Player.create('Bob', 'blue', context)
+    p3 = Player.create('Eve', 'green', context)
+    p4 = Player.create('Joseph', 'purple', context)
     players = [p1, p2, p3, p4]
 
     tm = TurnManager(players)
-    context = BoardContext()
     controller = GameController(board, players, tm, context)
     
     return GameSetup(

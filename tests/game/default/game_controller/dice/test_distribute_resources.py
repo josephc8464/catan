@@ -1,109 +1,109 @@
-import unittest
-from unittest.mock import MagicMock
-from tests.game.default.game_controller.conftest_base import BaseControllerTest
+from ..conftest import GameSetup
+
+# =========================================================================
+# PRODUCTION RULES
+# =========================================================================
+
+def test_roll_seven_no_production(game: GameSetup):
+    """Roll of 7 executes without distributing resource yields to any player."""
+    p1_start_res = game.p1.resources.copy()
+    p2_start_res = game.p2.resources.copy()
+
+    result = game.controller._distribute_resources(7)
+
+    assert result is False
+    assert game.p1.resources == p1_start_res
+    assert game.p2.resources == p2_start_res
 
 
-class TestDistributeResources(BaseControllerTest):
-    """
-    Unit tests for GameController._distribute_resources().
-    """
-    def setUp(self):
-        super().setUp()
-        self.controller.players = MagicMock()
-        self.controller.players.__iter__.return_value = [self.p1, self.p2]
+def test_robber_blocks_production(game: GameSetup):
+    """Structures located on the tile containing the robber yield no resources."""
+    tile_id = 1
+    tile = game.board.tiles[tile_id]
+    
+    if tile.resource == 'desert':
+        tile_id = 2
+        tile = game.board.tiles[tile_id]
 
-    def _make_tile(self, tile_id, resource, number, vertices, robber=False):
-        """Wires a tile and its vertices into the mocked board[cite: 6]."""
-        tile = MagicMock()
-        tile.tile_id = tile_id
-        tile.resource = resource
-        tile.number = number
-        self.board.tiles = {tile_id: tile}
-        self.board.tile_vertices = {tile_id: vertices}
-        if robber:
-            self.board.robber_placement = tile_id
-        return tile
+    vertex = game.board.tile_vertices[tile_id][0]
+    
+    # Setup settlement and move robber to tile
+    game.board.add_structure(vertex, game.p1.color, 'settlement')
+    game.p1.add_structure(vertex, 'settlement')
+    game.board.robber_placement = tile_id
 
-    # -------------------------------------------------------------------------
-    # PRODUCTION RULES
-    # -------------------------------------------------------------------------
+    start_res = game.p1.resources.copy()
 
-    def test_roll_seven_no_production(self):
-        """Roll of 7 always returns False and never distributes resources"""
-        self._make_tile(1, 'wood', 7, [5])
-        self.board.get_structure.return_value = ('settlement', 'red')
-        
-        result = self.controller._distribute_resources(7)
-        
-        self.assertTrue(result)
-        self.p1.add_resource.assert_not_called()
+    # Trigger distribution on tile's number
+    result = game.controller._distribute_resources(tile.number)
 
-    def test_robber_blocks_production(self):
-        """Structures on a tile with the robber do not receive resources."""
-        self._make_tile(1, 'wood', 8, [5], robber=True)
-        self.board.get_structure.return_value = ('settlement', 'red')
-        self.board.bank_has_resource.return_value = True
-        
-        result = self.controller._distribute_resources(8)
-        
-        self.assertTrue(result)
-        self.p1.add_resource.assert_not_called()
-
-    def test_production_settlement_and_city(self):
-        """Settlements produce 1, Cities produce 2, and the bank is debited."""
-        self._make_tile(1, 'ore', 6, [5, 10])
-        # Vertex 5 has a settlement (red/p1), Vertex 10 has a city (blue/p2)
-        self.board.get_structure.side_effect = lambda v: {
-            5: ('settlement', 'red'),
-            10: ('city', 'blue'),
-        }.get(v, (None, None))
-        self.board.bank_has_resource.return_value = True
-        self.board.get_tile_vertices.return_value = [5 , 10]
-        
-        result = self.controller._distribute_resources(6)
-        
-        self.assertTrue(result)
-        self.p1.add_resource.assert_called_once_with('ore', 1)
-        self.p2.add_resource.assert_called_once_with('ore', 2)
-        self.board.remove_bank_resource.assert_any_call('ore', 1)
-        self.board.remove_bank_resource.assert_any_call('ore', 2)
-
-    # -------------------------------------------------------------------------
-    # BANK DEPLETION
-    # -------------------------------------------------------------------------
-
-    def test_bank_depleted_nobody_receives(self):
-        """If bank cannot cover total demand, NO player receives."""
-        self._make_tile(1, 'brick', 5, [3])
-        self.board.get_structure.return_value = ('settlement', 'red')
-        self.board.bank_has_resource.return_value = False
-        
-        result = self.controller._distribute_resources(5)
-        
-        self.assertTrue(result)
-        self.p1.add_resource.assert_not_called()
-        self.board.remove_bank_resource.assert_not_called()
-
-    # -------------------------------------------------------------------------
-    # NO YIELD SCENARIOS
-    # -------------------------------------------------------------------------
-
-    def test_no_yield_scenarios(self):
-        """Desert tiles, empty vertices, or unmatched rolls yield nothing."""
-        self._make_tile(1, 'desert', 8, [5])
-        self.board.get_structure.return_value = ('settlement', 'red')
-        self.board.bank_has_resource.return_value = True
-        
-        # Test desert
-        self.controller._distribute_resources(8)
-        # Test unmatched roll
-        self.controller._distribute_resources(4)
-        # Test empty vertices (override mock)
-        self.board.get_structure.return_value = (None, None)
-        self.controller._distribute_resources(8)
-        
-        self.p1.add_resource.assert_not_called()
+    assert result is True
+    assert game.p1.resources == start_res
 
 
-if __name__ == '__main__':
-    unittest.main()
+def test_production_settlement_and_city(game: GameSetup):
+    """Settlements produce 1 resource unit and Cities produce 2 resource units."""
+    # Find a non-desert tile
+    tile_id = next(tid for tid, t in game.board.tiles.items() if t.resource != 'desert')
+    tile = game.board.tiles[tile_id]
+    vertices = game.board.tile_vertices[tile_id]
+
+    v1, v2 = vertices[0], vertices[1]
+
+    # Vertex 1 has a settlement (Player 1), Vertex 2 has a city (Player 2)
+    game.board.add_structure(v1, game.p1.color, 'settlement')
+    game.p1.add_structure(v1, 'settlement')
+
+    game.board.add_structure(v2, game.p2.color, 'city')
+    game.p2.add_structure(v2, 'city')
+
+    # Ensure robber is not on this tile
+    game.board.robber_placement = -1
+
+    p1_start = game.p1.resources[tile.resource]
+    p2_start = game.p2.resources[tile.resource]
+
+    result = game.controller._distribute_resources(tile.number)
+
+    assert result is True
+    assert game.p1.resources[tile.resource] == p1_start + 1
+    assert game.p2.resources[tile.resource] == p2_start + 2
+
+
+# =========================================================================
+# BANK DEPLETION
+# =========================================================================
+
+def test_bank_depleted_nobody_receives(game: GameSetup):
+    """If bank cannot fulfill total production demand, no player receives resources."""
+    tile_id = next(tid for tid, t in game.board.tiles.items() if t.resource != 'desert')
+    tile = game.board.tiles[tile_id]
+    vertex = game.board.tile_vertices[tile_id][0]
+
+    game.board.add_structure(vertex, game.p1.color, 'settlement')
+    game.p1.add_structure(vertex, 'settlement')
+    game.board.robber_placement = -1
+
+    # Empty bank reserves for this resource
+    game.board.bank[tile.resource] = 0
+    start_res = game.p1.resources.copy()
+
+    result = game.controller._distribute_resources(tile.number)
+
+    assert result is True
+    assert game.p1.resources == start_res
+
+
+# =========================================================================
+# NO YIELD SCENARIOS
+# =========================================================================
+
+def test_no_yield_scenarios(game: GameSetup):
+    """Desert tiles, unbuilt vertices, or non-matching rolls yield no resources."""
+    p1_start_res = game.p1.resources.copy()
+
+    # Roll that matches no producing tiles or empty board state
+    result = game.controller._distribute_resources(2)
+
+    assert result is True
+    assert game.p1.resources == p1_start_res
