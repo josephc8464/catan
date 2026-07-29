@@ -1,35 +1,32 @@
-import unittest
-from unittest.mock import MagicMock, call
-from tests.game.default.game_controller.conftest_base import BaseControllerTest
+from ..conftest import GameSetup
+
+# =========================================================================
+# SUCCESS CASES
+# =========================================================================
+
+def test_end_turn_advances_current_player(game: GameSetup):
+    """Ending turn advances current player to the next turn and resets dice roll state."""
+    assert game.tm.get_current_player() == game.p1
+    game.tm.set_dice_rolled()
+
+    game.controller.end_turn()
+
+    assert game.tm.get_current_player() == game.p2
+    assert game.tm.dice_rolled is False
 
 
-class TestEndTurn(BaseControllerTest):
-    """
-    Unit tests for GameController.end_turn().
-    """
+def test_end_turn_promotes_bought_dev_cards(game: GameSetup):
+    """Ending turn updates outgoing player's bought dev cards while leaving opponents untouched."""
+    # Place a bought card in p1's unplayable/bought inventory
+    game.p1.bought_dev_cards.append('knight')
+    assert len(game.p1.active_dev_cards) == 0
 
-    def test_end_turn_sequence(self):
-        """
-        Successfully updates the outgoing player's dev cards before advancing the turn.
-        """
-        self.tm.get_current_player.return_value = self.p1
-        
-        # Set up a manager to track the exact order of calls across different mocks
-        manager = MagicMock()
-        manager.attach_mock(self.p1.update_dev_cards, 'update_dev_cards')
-        manager.attach_mock(self.tm.next_turn, 'next_turn')
+    game.controller.end_turn()
 
-        self.controller.end_turn()
+    # Outgoing player (p1) has cards updated to active
+    assert 'knight' in game.p1.active_dev_cards
+    assert len(game.p1.bought_dev_cards) == 0
 
-        # Verify the exact execution order: update_dev_cards MUST happen before next_turn
-        manager.assert_has_calls([
-            call.update_dev_cards(),
-            call.next_turn()
-        ])
-        
-        # Ensure the opponent's dev cards were untouched
-        self.p2.update_dev_cards.assert_not_called()
-
-
-if __name__ == '__main__':
-    unittest.main()
+    # Opponent (p2) dev card state is untouched
+    assert len(game.p2.bought_dev_cards) == 0
+    assert len(game.p2.active_dev_cards) == 0
