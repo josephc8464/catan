@@ -1,59 +1,89 @@
-import unittest
-from tests.game.default.game_controller.conftest_base import BaseControllerTest
+import pytest
+from ..conftest import GameSetup, assert_not_paid
+from game.player import Player
+
+SETTLEMENT = 'settlement'
+
+V1 = 5
+V_ADJ = 4
 
 
-class TestPlaceInitialSettlement(BaseControllerTest):
-    """
-    Unit tests for GameController.place_initial_settlement().
-    """
-
-    def setUp(self):
-        super().setUp()
-        self.vertex = 5
-        self.board.get_structure.return_value = (None, None)
-        self.board.has_structure_neighbor.return_value = False
-
-    # -------------------------------------------------------------------------
-    # SUCCESS
-    # -------------------------------------------------------------------------
-
-    def test_success_places_initial_settlement(self):
-        """Places a free initial settlement on an empty, valid vertex."""
-        self.p1.structures = []
-        
-        result = self.controller.place_initial_settlement(self.p1, self.vertex)
-        
-        self.assertTrue(result)
-        self.board.add_structure.assert_called_once_with(self.vertex, self.p1.color, 'settlement')
-        self.assertIn((self.vertex, 'settlement'), self.p1.structures)
-        self.p1.remove_resources.assert_not_called()
-
-    def test_success_boundary_vertices(self):
-        """Validates standard board boundary vertex extremes."""
-        self.assertTrue(self.controller.place_initial_settlement(self.p1, 0))
-        self.assertTrue(self.controller.place_initial_settlement(self.p1, 53))
-
-    # -------------------------------------------------------------------------
-    # FAIL GUARDS
-    # -------------------------------------------------------------------------
-
-    def test_fails_guards(self):
-        """Fails cleanly on bad turn, vertex occupancy, or distance rule violations."""
-        # 1. Not player's turn
-        self.assertFalse(self.controller.place_initial_settlement(self.p2, self.vertex))
-        
-        # 2. Vertex occupied (settlement or city)
-        self.board.get_structure.return_value = ('settlement', 'blue')
-        self.assertFalse(self.controller.place_initial_settlement(self.p1, self.vertex))
-        
-        # 3. Distance rule violated (neighboring structure exists)
-        self.board.get_structure.return_value = (None, None)
-        self.board.has_structure_neighbor.return_value = True
-        self.assertFalse(self.controller.place_initial_settlement(self.p1, self.vertex))
-        
-        # Verify board was never mutated during any failure
-        self.board.add_structure.assert_not_called()
+def _assert_initial_settlement_unchanged(game: GameSetup, player: Player, result: bool, vertex: int) -> None:
+    """Asserts that placing an initial settlement failed and state remains untouched."""
+    assert result is False
+    assert (vertex, game.context.STRUCTURE_TYPES[0]) not in player.structures
+    struct_type, _ = game.board.get_structure(vertex)
+    assert struct_type is None
 
 
-if __name__ == '__main__':
-    unittest.main()
+def _assert_initial_settlement_changed(game: GameSetup, player: Player, result: bool, vertex: int) -> None:
+    """Asserts that placing an initial settlement succeeded and state was updated."""
+    assert result is True
+    assert (vertex, game.context.STRUCTURE_TYPES[0]) in player.structures
+    struct_type, owner_color = game.board.get_structure(vertex)
+    assert struct_type == SETTLEMENT
+    assert owner_color == player.color
+
+
+# =========================================================================
+# SUCCESS CASES
+# =========================================================================
+
+def test_success_places_initial_settlement(game: GameSetup):
+    """Places a free initial settlement on an empty, valid vertex."""
+    start_res = game.p1.resources.copy()
+
+    result = game.controller.place_initial_settlement(game.p1, V1)
+
+    _assert_initial_settlement_changed(game, game.p1, result, V1)
+    assert_not_paid(game.p1, start_res)
+
+
+@pytest.mark.parametrize("vertex", [0, 53])
+def test_success_boundary_vertices(game: GameSetup, vertex: int):
+    """Validates boundary vertex extremes on standard board graph."""
+    start_res = game.p1.resources.copy()
+
+    result = game.controller.place_initial_settlement(game.p1, vertex)
+
+    _assert_initial_settlement_changed(game, game.p1, result, vertex)
+    assert_not_paid(game.p1, start_res)
+
+
+# =========================================================================
+# FAILURE CASES
+# =========================================================================
+
+def test_fails_not_turn(game: GameSetup):
+    """Initial settlement placement fails if it is not the player's turn."""
+    start_res = game.p2.resources.copy()
+
+    result = game.controller.place_initial_settlement(game.p2, V1)
+
+    _assert_initial_settlement_unchanged(game, game.p2, result, V1)
+    assert_not_paid(game.p2, start_res)
+
+
+def test_fails_vertex_occupied(game: GameSetup):
+    """Fails if target vertex already contains a structure."""
+    game.board.add_structure(V1, game.p2.color, SETTLEMENT)
+    game.p2.add_structure(V1, SETTLEMENT)
+    start_res = game.p1.resources.copy()
+
+    result = game.controller.place_initial_settlement(game.p1, V1)
+
+    assert result is False
+    assert V1 not in game.p1.structures
+    assert_not_paid(game.p1, start_res)
+
+
+def test_fails_distance_rule(game: GameSetup):
+    """Fails if an adjacent vertex has a structure (distance rule violation)."""
+    game.board.add_structure(V_ADJ, game.p2.color, SETTLEMENT)
+    game.p2.add_structure(V_ADJ, SETTLEMENT)
+    start_res = game.p1.resources.copy()
+
+    result = game.controller.place_initial_settlement(game.p1, V1)
+
+    _assert_initial_settlement_unchanged(game, game.p1, result, V1)
+    assert_not_paid(game.p1, start_res)

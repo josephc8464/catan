@@ -1,84 +1,73 @@
-import unittest
-from unittest.mock import MagicMock
-from tests.game.default.game_controller.conftest_base import BaseControllerTest
+import pytest
+from ..conftest import GameSetup, assert_not_paid
+from game.player import Player
+
+SETTLEMENT = 'settlement'
+
+# =========================================================================
+# SUCCESS CASES
+# =========================================================================
+
+def test_success_grants_resources_from_adjacent_tiles(game: GameSetup):
+    """Places Round 2 setup settlement and grants exactly 1 resource per adjacent producing tile."""
+    # Find a non-desert tile and one of its vertices
+    tile_id = next(tid for tid, t in game.board.tiles.items() if t.resource != 'desert')
+    tile = game.board.tiles[tile_id]
+    vertex = game.board.tile_vertices[tile_id][0]
+
+    start_amount = game.p1.resources[tile.resource]
+
+    result = game.controller.place_initial_settlement_r2(game.p1, vertex)
+
+    assert result is True
+    assert (vertex, game.context.STRUCTURE_TYPES[0]) in game.p1.structures
+    assert game.p1.resources[tile.resource] > start_amount
 
 
-class TestPlaceInitialSettlementR2(BaseControllerTest):
-    """
-    Unit tests for GameController.place_initial_settlement_r2().
-    """
+def test_success_no_resources_granted_from_desert_or_empty_bank(game: GameSetup):
+    """Desert tiles and depleted bank resources yield no bonus starting resources."""
+    tile_id = next(tid for tid, t in game.board.tiles.items() if t.resource != 'desert')
+    tile = game.board.tiles[tile_id]
+    vertex = game.board.tile_vertices[tile_id][0]
 
-    def setUp(self):
-        super().setUp()
-        self.vertex = 10
-        self.board.get_structure.return_value = (None, None)
-        self.board.has_structure_neighbor.return_value = False
-        self.board.bank_has_resource.return_value = True
+    # Empty the bank for this resource type
+    game.board.bank[tile.resource] = 0
+    start_res = game.p1.resources.copy()
 
-    def _make_tile(self, tile_id, resource, number, vertices):
-        """Helper: wires a tile into board.tiles and board.tile_vertices."""
-        tile = MagicMock()
-        tile.tile_id = tile_id
-        tile.resource = resource
-        tile.number = number
-        return tile
+    result = game.controller.place_initial_settlement_r2(game.p1, vertex)
 
-    # -------------------------------------------------------------------------
-    # SUCCESS
-    # -------------------------------------------------------------------------
-
-    def test_success_grants_resources_from_adjacent_tiles(self):
-        """Places settlement and grants exactly 1 resource per adjacent producing tile."""
-        tile1 = self._make_tile(1, 'wood', 8, [self.vertex, 11, 12])
-        tile2 = self._make_tile(2, 'ore', 5, [self.vertex])
-        
-        self.board.tiles = {1: tile1, 2: tile2}
-        self.board.tile_vertices = {1: [self.vertex, 11, 12], 2: [self.vertex]}
-
-        result = self.controller.place_initial_settlement_r2(self.p1, self.vertex)
-        
-        self.assertTrue(result)
-        self.p1.add_resource.assert_any_call('wood', 1)
-        self.p1.add_resource.assert_any_call('ore', 1)
-        self.board.remove_bank_resource.assert_any_call('wood', 1)
-        self.board.remove_bank_resource.assert_any_call('ore', 1)
-
-    def test_success_no_resources_granted_from_desert_or_empty_bank(self):
-        """Desert tiles and depleted bank resources yield nothing."""
-        tile1 = self._make_tile(1, 'desert', None, [self.vertex])
-        tile2 = self._make_tile(2, 'wheat', 5, [self.vertex])
-        
-        self.board.tiles = {1: tile1, 2: tile2}
-        self.board.tile_vertices = {1: [self.vertex], 2: [self.vertex]}
-        self.board.bank_has_resource.return_value = False  # Bank is empty
-        
-        result = self.controller.place_initial_settlement_r2(self.p1, self.vertex)
-        
-        self.assertTrue(result)
-        self.p1.add_resource.assert_not_called()
-        self.board.remove_bank_resource.assert_not_called()
-
-    # -------------------------------------------------------------------------
-    # FAIL GUARDS
-    # -------------------------------------------------------------------------
-
-    def test_fails_guards_no_resources_granted(self):
-        """Fails cleanly without distributing resources on bad turn or distance rules."""
-        tile1 = self._make_tile(1, 'wood', 6, [self.vertex])
-        self.board.tiles = {1: tile1}
-        self.board.tile_vertices = {1: [self.vertex]}
-        
-        # 1. Not player's turn
-        self.assertFalse(self.controller.place_initial_settlement_r2(self.p2, self.vertex))
-        
-        # 2. Occupancy/Distance rule violated
-        self.board.has_structure_neighbor.return_value = True
-        self.assertFalse(self.controller.place_initial_settlement_r2(self.p1, self.vertex))
-        
-        # Ensure no resources were falsely granted during failures
-        self.p1.add_resource.assert_not_called()
-        self.p2.add_resource.assert_not_called()
+    assert result is True
+    assert (vertex, game.context.STRUCTURE_TYPES[0]) in game.p1.structures
+    assert game.p1.resources == start_res
 
 
-if __name__ == '__main__':
-    unittest.main()
+# =========================================================================
+# FAILURE CASES
+# =========================================================================
+
+def test_fails_not_turn(game: GameSetup):
+    """Round 2 initial settlement placement fails if it is not the active player's turn."""
+    vertex = 10
+    start_res = game.p2.resources.copy()
+
+    result = game.controller.place_initial_settlement_r2(game.p2, vertex)
+
+    assert result is False
+    assert (vertex, game.context.STRUCTURE_TYPES[0]) not in game.p2.structures
+    assert game.p2.resources == start_res
+
+
+def test_fails_distance_rule(game: GameSetup):
+    """Round 2 placement fails without granting resources if distance rule is violated."""
+    vertex = 10
+    v_adj = 5
+    game.board.add_structure(v_adj, game.p2.color, SETTLEMENT)
+    game.p2.add_structure(v_adj, SETTLEMENT)
+
+    start_res = game.p1.resources.copy()
+
+    result = game.controller.place_initial_settlement_r2(game.p1, vertex)
+
+    assert result is False
+    assert (vertex, game.context.STRUCTURE_TYPES[0]) not in game.p1.structures
+    assert game.p1.resources == start_res

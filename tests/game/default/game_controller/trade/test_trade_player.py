@@ -1,77 +1,127 @@
-import unittest
-from tests.game.default.game_controller.conftest_base import BaseControllerTest
+import pytest
+from tests.game.default.game_controller.conftest import GameSetup
 
 
-class TestTradePlayer(BaseControllerTest):
+@pytest.fixture
+def player_trade_game(game: GameSetup) -> GameSetup:
     """
-    Unit tests for GameController.trade_player().
-    Takes dicts for offered resources and requested resources.
+    Pre-configures a valid state for player-to-player domestic trading:
+    - Player 1 has 2 wood to offer
+    - Player 2 has 1 ore to give back
+    - Dice have been rolled
     """
+    game.p1.add_resource('wood', 2)
+    game.p2.add_resource('ore', 1)
 
-    def setUp(self):
-        super().setUp()
-        self.tm.dice_rolled = True
-        
-        # P1 has wood to offer
-        self.p1.can_afford.return_value = True
-        self.p1.resources = {'wood': 2, 'brick': 0, 'sheep': 0, 'wheat': 0, 'ore': 0}
-        self.offer = {'wood': 2}
-        
-        # P2 has ore to trade back
-        self.p2.can_afford.return_value = True
-        self.p2.resources = {'wood': 0, 'brick': 0, 'sheep': 0, 'wheat': 0, 'ore': 1}
-        self.request = {'ore': 1}
-
-    # -------------------------------------------------------------------------
-    # SUCCESS
-    # -------------------------------------------------------------------------
-
-    def test_success_domestic_trade(self):
-        """Successfully executes a trade between two players."""
-        result = self.controller.trade_player(self.p1, self.p2, self.offer, self.request)
-        self.assertTrue(result)
-
-        # Player 1 gives wood, gets ore
-        self.p1.remove_resources.assert_called_once_with(self.offer)
-        self.p1.add_resources.assert_called_once_with(self.request)
-
-        # Player 2 gives ore, gets wood
-        self.p2.remove_resources.assert_called_once_with(self.request)
-        self.p2.add_resources.assert_called_once_with(self.offer)
-
-    # -------------------------------------------------------------------------
-    # FAIL GUARDS
-    # -------------------------------------------------------------------------
-
-    def test_fails_guards(self):
-        """Fails cleanly on bad turn, unrolled dice, missing resources, or self-trade."""
-        # 1. Not active player's turn
-        self.assertFalse(self.controller.trade_player(self.p2, self.p1, self.request, self.offer))
-
-        # 2. Dice not rolled
-        self.tm.dice_rolled = False
-        self.assertFalse(self.controller.trade_player(self.p1, self.p2, self.offer, self.request))
-        self.tm.dice_rolled = True
-
-        # 3. Active player lacks offered resources
-        self.p1.can_afford.return_value = False
-        self.assertFalse(self.controller.trade_player(self.p1, self.p2, self.offer, self.request))
-        self.p1.can_afford.return_value = True
-
-        # 4. Target player lacks requested resources
-        self.p2.can_afford.return_value = False
-        self.assertFalse(self.controller.trade_player(self.p1, self.p2, self.offer, self.request))
-        self.p2.can_afford.return_value = True
-
-        # 5. Cannot trade with self
-        self.assertFalse(self.controller.trade_player(self.p1, self.p1, self.offer, self.request))
-
-        # Verify no mutations occurred during failures
-        self.p1.remove_resource.assert_not_called()
-        self.p1.add_resource.assert_not_called()
-        self.p2.remove_resource.assert_not_called()
-        self.p2.add_resource.assert_not_called()
+    game.tm.set_dice_rolled()
+    return game
 
 
-if __name__ == '__main__':
-    unittest.main()
+# =========================================================================
+# SUCCESS CASES
+# =========================================================================
+
+def test_success_domestic_trade(player_trade_game: GameSetup):
+    """Successfully executes a resource trade between two players."""
+    offer = {'wood': 2}
+    request = {'ore': 1}
+
+    result = player_trade_game.controller.trade_player(
+        player_trade_game.p1, player_trade_game.p2, offer, request
+    )
+
+    assert result is True
+    # Player 1 gives wood, gains ore
+    assert player_trade_game.p1.resources['wood'] == 0
+    assert player_trade_game.p1.resources['ore'] == 1
+    # Player 2 gives ore, gains wood
+    assert player_trade_game.p2.resources['ore'] == 0
+    assert player_trade_game.p2.resources['wood'] == 2
+
+
+# =========================================================================
+# FAILURE CASES
+# =========================================================================
+
+def test_fails_not_turn(player_trade_game: GameSetup):
+    """Domestic trade fails if is neither player's turn."""
+    offer = {'ore': 1}
+    request = {'wood': 2}
+
+    p3_start = player_trade_game.p3.resources.copy()
+    p2_start = player_trade_game.p2.resources.copy()
+
+    result = player_trade_game.controller.trade_player(
+        player_trade_game.p2, player_trade_game.p3, offer, request
+    )
+
+    assert result is False
+    assert player_trade_game.p3.resources == p3_start
+    assert player_trade_game.p2.resources == p2_start
+
+
+def test_fails_not_roll_dice(player_trade_game: GameSetup):
+    """Domestic trade fails if dice have not been rolled yet this turn."""
+    player_trade_game.tm.dice_rolled = False
+    offer = {'wood': 2}
+    request = {'ore': 1}
+
+    p1_start = player_trade_game.p1.resources.copy()
+    p2_start = player_trade_game.p2.resources.copy()
+
+    result = player_trade_game.controller.trade_player(
+        player_trade_game.p1, player_trade_game.p2, offer, request
+    )
+
+    assert result is False
+    assert player_trade_game.p1.resources == p1_start
+    assert player_trade_game.p2.resources == p2_start
+
+
+def test_fails_active_player_lacks_offered_resources(player_trade_game: GameSetup):
+    """Domestic trade fails if active player lacks the resources offered."""
+    offer = {'wood': 5}
+    request = {'ore': 1}
+
+    p1_start = player_trade_game.p1.resources.copy()
+    p2_start = player_trade_game.p2.resources.copy()
+
+    result = player_trade_game.controller.trade_player(
+        player_trade_game.p1, player_trade_game.p2, offer, request
+    )
+
+    assert result is False
+    assert player_trade_game.p1.resources == p1_start
+    assert player_trade_game.p2.resources == p2_start
+
+
+def test_fails_target_player_lacks_requested_resources(player_trade_game: GameSetup):
+    """Domestic trade fails if target player lacks the requested resources."""
+    offer = {'wood': 2}
+    request = {'ore': 3}
+
+    p1_start = player_trade_game.p1.resources.copy()
+    p2_start = player_trade_game.p2.resources.copy()
+
+    result = player_trade_game.controller.trade_player(
+        player_trade_game.p1, player_trade_game.p2, offer, request
+    )
+
+    assert result is False
+    assert player_trade_game.p1.resources == p1_start
+    assert player_trade_game.p2.resources == p2_start
+
+
+def test_fails_self_trade(player_trade_game: GameSetup):
+    """Player cannot trade resources with themselves."""
+    offer = {'wood': 2}
+    request = {'wood': 1}
+
+    p1_start = player_trade_game.p1.resources.copy()
+
+    result = player_trade_game.controller.trade_player(
+        player_trade_game.p1, player_trade_game.p1, offer, request
+    )
+
+    assert result is False
+    assert player_trade_game.p1.resources == p1_start

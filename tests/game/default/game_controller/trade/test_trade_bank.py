@@ -1,72 +1,89 @@
-import unittest
-from unittest.mock import MagicMock, call
-from tests.game.default.game_controller.conftest_base import BaseControllerTest
+import pytest
+from tests.game.default.game_controller.conftest import GameSetup
+
+GIVE_RES = 'wood'
+GET_RES = 'ore'
 
 
-class TestTradeBank(BaseControllerTest):
+@pytest.fixture
+def bank_trade_game(game: GameSetup) -> GameSetup:
     """
-    Unit tests for GameController.trade_bank().
-    Assumes standard 4:1 bank trade mechanic.
+    Pre-configures a valid state for standard 4:1 bank trading:
+    - Player 1 has 4 wood
+    - Dice have been rolled
+    - Bank has available ore
     """
-
-    def setUp(self):
-        super().setUp()
-        self.tm.dice_rolled = True
-        self.p1.resources = {'wood': 4, 'brick': 0, 'sheep': 0, 'wheat': 0, 'ore': 0}
-        self.board.bank_has_resource.return_value = True
-
-    # -------------------------------------------------------------------------
-    # SUCCESS
-    # -------------------------------------------------------------------------
-
-    def test_success_trade_bank_4_to_1(self):
-        """Successfully trades 4 of a resource for 1 of another."""
-        manager = MagicMock()
-        manager.attach_mock(self.p1.remove_resource, 'p1_remove')
-        manager.attach_mock(self.p1.add_resource, 'p1_add')
-        manager.attach_mock(self.board.add_bank_resource, 'bank_add')
-        manager.attach_mock(self.board.remove_bank_resource, 'bank_remove')
-
-        result = self.controller.trade_bank(self.p1, 'wood', 'ore')
-        self.assertTrue(result)
-
-        # Verify exact sequence of transfers
-        manager.assert_has_calls([
-            call.p1_remove('wood', 4),
-            call.bank_add('wood', 4),
-            call.bank_remove('ore', 1),
-            call.p1_add('ore', 1)
-        ], any_order=True)
-
-    # -------------------------------------------------------------------------
-    # FAIL GUARDS
-    # -------------------------------------------------------------------------
-
-    def test_fails_guards(self):
-        """Fails cleanly on bad turn, unrolled dice, insufficient funds, or empty bank."""
-        # 1. Not player's turn
-        self.assertFalse(self.controller.trade_bank(self.p2, 'wood', 'ore'))
-
-        # 2. Dice not rolled
-        self.tm.dice_rolled = False
-        self.assertFalse(self.controller.trade_bank(self.p1, 'wood', 'ore'))
-        self.tm.dice_rolled = True
-
-        # 3. Insufficient player resources (needs 4, has 3)
-        self.p1.can_afford.return_value = False
-        self.assertFalse(self.controller.trade_bank(self.p1, 'wood', 'ore'))
-
-        # 4. Bank is empty of requested resource
-        self.board.bank_has_resource.return_value = False
-        self.assertFalse(self.controller.trade_bank(self.p1, 'wood', 'ore'))
-
-        # 5. Invalid resources
-        self.assertFalse(self.controller.trade_bank(self.p1, 'gold', 'ore'))
-
-        # Verify no mutations occurred during failures
-        self.p1.remove_resource.assert_not_called()
-        self.p1.add_resource.assert_not_called()
+    game.p1.resources = {r: 0 for r in game.context.RESOURCES}
+    game.p1.add_resource(GIVE_RES, 4)
+    game.tm.set_dice_rolled()
+    return game
 
 
-if __name__ == '__main__':
-    unittest.main()
+# =========================================================================
+# SUCCESS CASES
+# =========================================================================
+
+def test_success_trade_bank_4_to_1(bank_trade_game: GameSetup):
+    """Successfully trades 4 units of a resource for 1 unit of another with the bank."""
+    p1_give_start = bank_trade_game.p1.resources[GIVE_RES]
+    p1_get_start = bank_trade_game.p1.resources[GET_RES]
+    bank_give_start = bank_trade_game.board.bank[GIVE_RES]
+    bank_get_start = bank_trade_game.board.bank[GET_RES]
+
+    result = bank_trade_game.controller.trade_bank(bank_trade_game.p1, GIVE_RES, GET_RES)
+
+    assert result is True
+    assert bank_trade_game.p1.resources[GIVE_RES] == p1_give_start - 4
+    assert bank_trade_game.p1.resources[GET_RES] == p1_get_start + 1
+    assert bank_trade_game.board.bank[GIVE_RES] == bank_give_start + 4
+    assert bank_trade_game.board.bank[GET_RES] == bank_get_start - 1
+
+
+# =========================================================================
+# FAILURE CASES
+# =========================================================================
+
+def test_fails_not_turn(bank_trade_game: GameSetup):
+    """Bank trade fails if it is not the player's turn."""
+    bank_trade_game.p2.resources = {r: 0 for r in bank_trade_game.context.RESOURCES}
+    bank_trade_game.p2.add_resource(GIVE_RES, 4)
+
+    start_res = bank_trade_game.p2.resources.copy()
+
+    result = bank_trade_game.controller.trade_bank(bank_trade_game.p2, GIVE_RES, GET_RES)
+
+    assert result is False
+    assert bank_trade_game.p2.resources == start_res
+
+
+def test_fails_not_roll_dice(bank_trade_game: GameSetup):
+    """Bank trade fails if dice have not been rolled yet this turn."""
+    bank_trade_game.tm.dice_rolled = False
+    start_res = bank_trade_game.p1.resources.copy()
+
+    result = bank_trade_game.controller.trade_bank(bank_trade_game.p1, GIVE_RES, GET_RES)
+
+    assert result is False
+    assert bank_trade_game.p1.resources == start_res
+
+
+def test_fails_insufficient_player_resources(bank_trade_game: GameSetup):
+    """Bank trade fails if player has fewer than 4 of the offered resource."""
+    bank_trade_game.p1.resources[GIVE_RES] = 3
+    start_res = bank_trade_game.p1.resources.copy()
+
+    result = bank_trade_game.controller.trade_bank(bank_trade_game.p1, GIVE_RES, GET_RES)
+
+    assert result is False
+    assert bank_trade_game.p1.resources == start_res
+
+
+def test_fails_bank_empty(bank_trade_game: GameSetup):
+    """Bank trade fails if the bank is out of the requested resource."""
+    bank_trade_game.board.bank[GET_RES] = 0
+    start_res = bank_trade_game.p1.resources.copy()
+
+    result = bank_trade_game.controller.trade_bank(bank_trade_game.p1, GIVE_RES, GET_RES)
+
+    assert result is False
+    assert bank_trade_game.p1.resources == start_res

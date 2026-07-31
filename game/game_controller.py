@@ -397,11 +397,11 @@ class GameController:
     ) -> bool:
         """
         Executes a domestic trade between two players.
-        Only player1 (the initiator) must be the active player.
+        Either player can iniate a trade as long as it is one player's turn.
         player1 offers res_req1 and receives res_req2 in return.
         Raises ValueError if any resource in either map is not defined in BoardContext.
         """
-        if not self._is_turn(player1):
+        if not self._is_turn(player1) and not self._is_turn(player2):
             return False
 
         if not self._has_rolled(player1):
@@ -612,17 +612,10 @@ class GameController:
             logging.info(GameMsg.err_robber_same_tile())
             return False
 
-        if player == victim:
-            logging.info(GameMsg.err_steal_self(player.name))
-            return False
-
-        victim_resources = [r for r, a in victim.resources.items() if a > 0]
-        if not victim_resources:
-            logging.info(GameMsg.err_no_resources_to_steal(victim.name))
+        if not self.steal(selection, player, victim):
             return False
 
         self.move_robber(tile_id)
-        self.steal(selection, player, victim)
         player.remove_dev_card(dev_card)
         self.turn_manager.set_played_dev_card()
 
@@ -634,7 +627,6 @@ class GameController:
         Plays a Monopoly development card.
         Steals all cards of the chosen resource from every other player.
         Must be played after rolling the dice.
-        Raises ValueError if resource is not defined in BoardContext.
         """
         dev_card = 'monopoly'
 
@@ -642,7 +634,6 @@ class GameController:
             return False
 
         self.board_context.validate_resource(resource)
-
         for victim in self.players:
             if victim == player:
                 continue
@@ -657,44 +648,42 @@ class GameController:
         logging.info(GameMsg.success_dev_card(player.name, dev_card))
         return True
 
-    def play_year_of_plenty(self, player: Player, resource1: str, resource2: str) -> bool:
+    def play_year_of_plenty(self, player: Player, resource1: str, resource2: str, play_single: bool) -> bool:
         """
         Plays a Year of Plenty development card.
         Grants the player any two resources directly from the bank.
         Must be played after rolling the dice.
-        Raises ValueError if either resource is not defined in BoardContext.
         """
         dev_card = 'year_of_plenty'
 
         if not self._check_dev_card_preconditions(player, dev_card):
             return False
 
-        self.board_context.validate_resource(resource1)
-        self.board_context.validate_resource(resource2)
-
-        if resource1 == resource2:
+        if not play_single and resource1 == resource2:
             if not self.board.bank_has_resource(resource1, 2):
-                logging.info(GameMsg.err_bank_empty(resource1))
-                return False
+                    logging.info(GameMsg.err_bank_empty(resource1))
+                    return False
         else:
             if not self.board.bank_has_resource(resource1, 1):
                 logging.info(GameMsg.err_bank_empty(resource1))
                 return False
-            if not self.board.bank_has_resource(resource2, 1):
+            if not play_single and not self.board.bank_has_resource(resource2, 1):
                 logging.info(GameMsg.err_bank_empty(resource2))
                 return False
 
         player.add_resource(resource1, 1)
-        player.add_resource(resource2, 1)
         self.board.remove_bank_resource(resource1, 1)
-        self.board.remove_bank_resource(resource2, 1)
+
+        if not play_single:
+            player.add_resource(resource2, 1)
+            self.board.remove_bank_resource(resource2, 1)
 
         player.remove_dev_card(dev_card)
         self.turn_manager.set_played_dev_card()
         logging.info(GameMsg.success_dev_card(player.name, dev_card))
         return True
 
-    def play_road_building(self, player: Player, v1: int, v2: int, v3: int, v4: int) -> bool:
+    def play_road_building(self, player: Player, v1: int, v2: int, v3: int, v4: int, play_single: bool) -> bool:
         """
         Plays a Road Building development card, placing two free roads atomically.
         If the second road fails, the first is rolled back entirely.
@@ -707,7 +696,12 @@ class GameController:
             return False
 
         roads_remaining = self.board_context.get_max_pieces('road') - len(player.roads)
-        if roads_remaining < 2:
+
+        if not play_single and roads_remaining < 2:
+            logging.info(GameMsg.err_max_pieces(player.name, 'road'))
+            return False
+        
+        if play_single and roads_remaining == 0:
             logging.info(GameMsg.err_max_pieces(player.name, 'road'))
             return False
 
@@ -715,7 +709,7 @@ class GameController:
             logging.info(GameMsg.err_road_building_failed(v1, v2))
             return False
 
-        if not self.build_road(v3, v4, player, free=True):
+        if not play_single and not self.build_road(v3, v4, player, free=True):
             logging.info(GameMsg.err_road_building_failed(v3, v4))
             self.board.graph.clear_edge_color(v1, v2)
             player.remove_road(v1, v2)

@@ -1,83 +1,137 @@
-import unittest
-from unittest.mock import patch
-from tests.game.default.game_controller.conftest_base import BaseControllerTest
+import pytest
+from tests.game.default.game_controller.conftest import GameSetup
+
+# Port vertex edge configuration
+V1, V2 = 0, 1
 
 
-class TestTradePort(BaseControllerTest):
+@pytest.fixture
+def port_trade_game(game: GameSetup) -> GameSetup:
     """
-    Unit tests for GameController.trade_port().
-    Assumes checks for 3:1 generic or 2:1 specialized port access at specified vertices.
+    Pre-configures a valid state for port trading:
+    - Player 1 has 3 wood
+    - Player 1 owns a settlement on port vertex V1
+    - Dice have been rolled
     """
+    game.p1.resources = {r: 0 for r in game.context.RESOURCES}
+    game.p1.add_resource('wood', 3)
 
-    def setUp(self):
-        super().setUp()
-        self.tm.dice_rolled = True
-        self.p1.resources = {'wood': 3, 'brick': 0, 'sheep': 0, 'wheat': 0, 'ore': 0}
-        self.board.bank_has_resource.return_value = True
-        self.board.get_structure.return_value = ('settlement', 'red')
-        self.v1, self.v2 = 1, 2
+    game.board.add_structure(V1, game.p1.color, 'settlement')
+    game.p1.add_structure(V1, 'settlement')
 
-    # -------------------------------------------------------------------------
-    # SUCCESS
-    # -------------------------------------------------------------------------
+    game.tm.set_dice_rolled()
+    return game
 
-    def test_success_trade_generic_port_3_to_1(self):
-        """Successfully trades 3 of a resource for 1 via generic port."""
-        self.board.get_port.return_value = 'any'
-        result = self.controller.trade_port(self.p1, (self.v1, self.v2), 'wood', 'ore')
-        self.assertTrue(result)
-            
-        self.p1.remove_resource.assert_called_once_with('wood', 3)
-        self.p1.add_resource.assert_called_once_with('ore', 1)
 
-    def test_success_trade_special_port_2_to_1(self):
-        """Successfully trades 2 of a resource for 1 via specialized port."""
-        self.board.get_port.return_value = 'wood'
-        result = self.controller.trade_port(self.p1, (self.v1, self.v2), 'wood', 'ore')
-        self.assertTrue(result)
-            
-        self.p1.remove_resource.assert_called_once_with('wood', 2)
-        self.p1.add_resource.assert_called_once_with('ore', 1)
+# =========================================================================
+# SUCCESS CASES
+# =========================================================================
 
-    # -------------------------------------------------------------------------
-    # FAIL GUARDS
-    # -------------------------------------------------------------------------
+def test_success_trade_generic_port_3_to_1(port_trade_game: GameSetup):
+    """Successfully trades 3 units of a resource for 1 unit via generic 3:1 port."""
+    # Configure board to have generic port on edge (V1, V2)
+    port_trade_game.board.ports[(V1, V2)] = 'any'
 
-    def test_fails_guards(self):
-        """Fails cleanly on bad turn, unrolled dice, missing port, or insufficient resources."""
-        self.board.get_port.return_value = 'any'
+    result = port_trade_game.controller.trade_port(
+        port_trade_game.p1, (V1, V2), 'wood', 'ore'
+    )
 
-        # 1. Not player's turn
-        result = self.controller.trade_port(self.p2, (self.v1, self.v2), 'wood', 'ore')
-        self.assertFalse(result)
+    assert result is True
+    assert port_trade_game.p1.resources['wood'] == 0
+    assert port_trade_game.p1.resources['ore'] == 1
+
+
+def test_success_trade_special_port_2_to_1(port_trade_game: GameSetup):
+    """Successfully trades 2 units of a resource for 1 unit via specialized 2:1 port."""
+    # Configure board to have specialized wood port on edge (V1, V2)
+    port_trade_game.board.ports[(V1, V2)] = 'wood'
+
+    result = port_trade_game.controller.trade_port(
+        port_trade_game.p1, (V1, V2), 'wood', 'ore'
+    )
+
+    assert result is True
+    # Only 2 wood spent instead of 3
+    assert port_trade_game.p1.resources['wood'] == 1
+    assert port_trade_game.p1.resources['ore'] == 1
+
+
+# =========================================================================
+# FAILURE CASES
+# =========================================================================
+
+def test_fails_not_turn(port_trade_game: GameSetup):
+    """Port trade fails if it is not the active player's turn."""
+    port_trade_game.board.ports[(V1, V2)] = 'any'
+    port_trade_game.p2.resources = {r: 0 for r in port_trade_game.context.RESOURCES}
+    port_trade_game.p2.add_resource('wood', 3)
+    port_trade_game.board.add_structure(V1, port_trade_game.p2.color, 'settlement')
+    port_trade_game.p2.add_structure(V1, 'settlement')
+
+    p2_start = port_trade_game.p2.resources.copy()
+
+    result = port_trade_game.controller.trade_port(
+        port_trade_game.p2, (V1, V2), 'wood', 'ore'
+    )
+
+    assert result is False
+    assert port_trade_game.p2.resources == p2_start
+
+
+def test_fails_not_roll_dice(port_trade_game: GameSetup):
+    """Port trade fails if dice have not been rolled yet this turn."""
+    port_trade_game.board.ports[(V1, V2)] = 'any'
+    port_trade_game.tm.dice_rolled = False
+    start_res = port_trade_game.p1.resources.copy()
+
+    result = port_trade_game.controller.trade_port(
+        port_trade_game.p1, (V1, V2), 'wood', 'ore'
+    )
+
+    assert result is False
+    assert port_trade_game.p1.resources == start_res
+
+
+def test_fails_insufficient_player_resources(port_trade_game: GameSetup):
+    """Port trade fails if player lacks required trade ratio resources (e.g. 2 wood on 3:1 port)."""
+    port_trade_game.board.ports[(V1, V2)] = 'any'
+    port_trade_game.p1.resources['wood'] = 2
+    start_res = port_trade_game.p1.resources.copy()
+
+    result = port_trade_game.controller.trade_port(
+        port_trade_game.p1, (V1, V2), 'wood', 'ore'
+    )
+
+    assert result is False
+    assert port_trade_game.p1.resources == start_res
+
+
+def test_fails_bank_empty(port_trade_game: GameSetup):
+    """Port trade fails if the bank is depleted of requested resource."""
+    port_trade_game.board.ports[(V1, V2)] = 'any'
+    port_trade_game.board.bank['ore'] = 0
+    start_res = port_trade_game.p1.resources.copy()
+
+    result = port_trade_game.controller.trade_port(
+        port_trade_game.p1, (V1, V2), 'wood', 'ore'
+    )
+
+    assert result is False
+    assert port_trade_game.p1.resources == start_res
+
+
+def test_fails_no_port_access(port_trade_game: GameSetup):
+    """Port trade fails if the player has no structure built at the specified port location."""
+    port_trade_game.board.ports[(V1, V2)] = 'any'
     
-        # 2. Dice not rolled
-        self.tm.dice_rolled = False
-        result = self.controller.trade_port(self.p1, (self.v1, self.v2), 'wood', 'ore')
-        self.assertFalse(result)
-        self.tm.dice_rolled = True
-    
-        # 3. Insufficient player resources (needs 3, has 2)
-        self.p1.can_afford.return_value = False
-        result = self.controller.trade_port(self.p1, (self.v1, self.v2), 'wood', 'ore')
-        self.assertFalse(result)
-        self.p1.can_afford.return_value = True
-    
-        # 4. Bank is empty of requested resource
-        self.board.bank_has_resource.return_value = False
-        result = self.controller.trade_port(self.p1, (self.v1, self.v2), 'wood', 'ore')
-        self.assertFalse(result)
-        self.board.bank_has_resource.return_value = True
-    
-        # 5. Player does not have valid port access (ratio returns 4, which is bank trade)
-        self.board.get_structure.return_value = (None, None)
-        result = self.controller.trade_port(self.p1, (self.v1, self.v2), 'wood', 'ore')
-        self.assertFalse(result)
+    # Remove player structure from port vertex
+    port_trade_game.p1.structures.clear()
+    port_trade_game.board.remove_structure(V1)
+    start_res = port_trade_game.p1.resources.copy()
 
-        # Verify no mutations occurred during failures
-        self.p1.remove_resource.assert_not_called()
-        self.p1.add_resource.assert_not_called()
+    result = port_trade_game.controller.trade_port(
+        port_trade_game.p1, (V1, V2), 'wood', 'ore'
+    )
 
-
-if __name__ == '__main__':
-    unittest.main()
+    assert result is False
+    assert port_trade_game.p1.resources == start_res
